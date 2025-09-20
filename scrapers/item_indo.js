@@ -15,8 +15,9 @@ async function fetchItemDetail(url) {
     // Nama
     const name = $("h1.text-primary").first().text().trim() || "-";
 
-    // Gambar utama
-    let image = $(".col-md-4 img[data-src]").attr("data-src");
+    // Gambar utama (pakai data-src atau src)
+    let image = $(".col-md-4 img[data-src]").attr("data-src") 
+             || $(".col-md-4 img").attr("src");
     if (!image) image = "-";
     else if (!image.startsWith("http")) image = BASE_URL + image;
 
@@ -82,9 +83,16 @@ async function fetchPage(page = 1) {
     const $ = cheerio.load(data);
 
     const items = [];
-    $(".card .card-body b.h6 a.text-primary").each((_, el) => {
-      const href = $(el).attr("href");
-      if (href) items.push({ href });
+    $(".card").each((_, el) => {
+      const anchor = $(el).find("b.h6 a.text-primary");
+      const href = anchor.attr("href");
+      if (href) {
+        items.push({
+          href,
+          name: anchor.text().trim() || "-",
+          icon: $(el).find("img.avatar").attr("src") || "-"
+        });
+      }
     });
     return items;
   } catch {
@@ -113,4 +121,4 @@ export async function getItemIndoById(globalId, maxAttempts = 30) {
   }
 
   return null;
-}
+  }
