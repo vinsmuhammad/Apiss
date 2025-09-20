@@ -13,33 +13,39 @@ async function fetchItemDetail(url) {
     const $ = cheerio.load(data);
 
     // Nama
-    const name = $("b.h6 a.text-primary").first().text().trim() || "-";
+    const name = $("h1.text-primary").first().text().trim() || "-";
 
     // Gambar utama
     let image = $(".col-md-4 img[data-src]").attr("data-src");
     if (!image) image = "-";
     else if (!image.startsWith("http")) image = BASE_URL + image;
 
-    // Status Monster (semua tab yg id mulai dengan status-monster)
+    // Stats (Monster)
     const stats = [];
     $(".tab-pane[id^='status-monster'] dl p").each((_, el) => {
-      stats.push($(el).text().trim());
+      const txt = $(el).text().trim();
+      if (txt) stats.push(txt);
     });
     if (stats.length === 0) stats.push("-");
 
-    // Status NPC (semua tab yg id mulai dengan status-npc)
+    // NPC Stats
     const npcStats = [];
     $(".tab-pane[id^='status-npc'] dl p").each((_, el) => {
-      npcStats.push($(el).text().trim());
+      const txt = $(el).text().trim();
+      if (txt) npcStats.push(txt);
     });
-    if (npcStats.length === 0) npcStats.push("-");
+    if (npcStats.length === 0) {
+      if ($(".tab-pane[id^='status-npc']").text().match(/tidak ada/i)) {
+        npcStats.push("-");
+      }
+    }
 
-    // Craft: Player (semua tab yg id mulai dengan mats)
+    // Craft: Player
     let process = "-";
     $(".tab-pane[id^='mats']").each((_, el) => {
       const content = $(el).text().trim();
       if (content && !/Tidak ada/i.test(content)) {
-        process = content;
+        process = content.replace(/\s+/g, " ").trim();
       }
     });
 
@@ -47,7 +53,9 @@ async function fetchItemDetail(url) {
     const obtainedFrom = [];
     $("details summary:contains('Bisa di peroleh')").parent().find("a").each((_, el) => {
       const txt = $(el).text().trim();
-      if (txt && !txt.includes("Lihat...")) obtainedFrom.push(txt);
+      if (txt && !txt.includes("Lihat")) {
+        obtainedFrom.push(txt);
+      }
     });
     if (obtainedFrom.length === 0) obtainedFrom.push("-");
 
@@ -59,7 +67,7 @@ async function fetchItemDetail(url) {
       process,
       obtainedFrom
     };
-  } catch {
+  } catch (e) {
     return null;
   }
 }
