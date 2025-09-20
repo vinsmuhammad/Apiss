@@ -1,4 +1,4 @@
-import { getItemIndoById } from "../scrape/item_indo.js";
+import { getItemIndoById } from "../scrapers/item_indo.js";
 
 export default async function handler(req, res) {
   const { id } = req.query;
@@ -13,3 +13,4 @@ export default async function handler(req, res) {
 
   res.status(200).json(item);
 }
+
