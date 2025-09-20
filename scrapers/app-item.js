@@ -2,28 +2,10 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 
 const BASE_URL = "https://coryn.club";
+const PER_PAGE = 20; // jumlah item per halaman
 
-// daftar kategori & type (sesuai asli)
-const APP_TYPES = {
-  ARMOR: 8,
-  ADD: 6,
-  SHIELD: 17,
-  "1H": 4,
-  "2H": 5,
-  BOW: 9,
-  BOWGUN: 10,
-  KNUCKLES: 13,
-  "MAGIC DEVICE": 15,
-  STAFF: 19,
-  HALBERD: 26,
-  KATANA: 27
-};
-
-const PER_PAGE = 20; // Coryn default show=20 per page
-
-async function scrapePage(type, page = 0) {
-  const url = `${BASE_URL}/app_showcase.php?&show=${PER_PAGE}&type=${type}&p=${page}`;
-  const { data } = await axios.get(url, {
+async function scrapePage(page = 1) {
+  const { data } = await axios.get(`${BASE_URL}/app_showcase.php?page=${page}`, {
     headers: { "User-Agent": "Mozilla/5.0" },
     timeout: 8000
   });
@@ -38,10 +20,9 @@ async function scrapePage(type, page = 0) {
 
     let fixedLink;
     if (rawPath.startsWith("app/")) {
-      const filename = rawPath.slice(4);
-      fixedLink = BASE_URL + "/app/" + encodeURIComponent(filename);
+      fixedLink = BASE_URL + "/" + rawPath;
     } else {
-      fixedLink = BASE_URL + "/" + encodeURIComponent(rawPath.replace(/^\//, ""));
+      fixedLink = BASE_URL + "/" + rawPath.replace(/^\//, "");
     }
 
     apps.push({ nama: name, link: fixedLink });
@@ -50,35 +31,24 @@ async function scrapePage(type, page = 0) {
   return apps;
 }
 
-/**
- * Ambil app global berdasarkan id
- * id = urutan global (kategori berurutan sesuai APP_TYPES)
- */
-export async function getAppByGlobalId(globalId) {
+export async function getAppByGlobalId(globalId, maxAttempts = 30) {
   if (!globalId || globalId < 1) return null;
 
-  let remaining = globalId;
-  for (const [category, type] of Object.entries(APP_TYPES)) {
-    let page = 0;
+  let probeId = Number(globalId);
+  let attempts = 0;
 
-    while (true) {
-      const apps = await scrapePage(type, page);
-      if (apps.length === 0) break; // habis di kategori ini
+  while (attempts < maxAttempts) {
+    const page = Math.ceil(probeId / PER_PAGE);
+    const index = (probeId - 1) % PER_PAGE;
 
-      if (remaining <= apps.length) {
-        // id jatuh di kategori ini
-        const app = apps[remaining - 1];
-        return {
-          id: globalId,
-          category,
-          ...app
-        };
-      }
-
-      remaining -= apps.length;
-      page++;
+    const apps = await scrapePage(page);
+    if (index >= 0 && index < apps.length) {
+      return { id: globalId, ...apps[index] };
     }
+
+    probeId++;
+    attempts++;
   }
 
-  return null; // id terlalu besar
-      }
+  return null;
+}
