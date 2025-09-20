@@ -6,6 +6,9 @@ const STOP_AFTER_NOT_FOUND = 250;
 const SKIP_BEFORE_ID = 8000;
 
 let scriptRunning = false;
+let cache = null;
+let lastUpdate = 0;
+const INTERVAL = 2 * 60 * 60 * 1000; // 2 jam
 
 export function isScraping() {
   return scriptRunning;
@@ -50,15 +53,14 @@ export async function getItemById(id) {
   }
 }
 
-/**
- * Full scraping (sequential many IDs) is **disabled on serverless** by default because:
- * - It can run very long and hit timeouts.
- * - If you really need it, run locally or on a VM and store results externally (S3/DB).
- */
 export async function scrapeAllItems(force = false) {
   const IS_SERVERLESS = !!process.env.VERCEL;
   if (IS_SERVERLESS && !force) {
     throw new Error('Full scraping is disabled on serverless environments. Use getItemById(id) or run this script locally with force=true.');
+  }
+
+  if (!force && cache && Date.now() - lastUpdate < INTERVAL) {
+    return cache;
   }
 
   if (scriptRunning) return [];
@@ -82,10 +84,11 @@ export async function scrapeAllItems(force = false) {
     notFoundCount = 0;
     results.push(item);
     id++;
-    // be polite
     await new Promise(r => setTimeout(r, 300));
   }
 
   scriptRunning = false;
+  cache = results;
+  lastUpdate = Date.now();
   return results;
-}
+    }
