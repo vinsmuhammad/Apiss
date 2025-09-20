@@ -1,23 +1,23 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import fs from 'fs';
-import path from 'path';
 
 const BASE_URL = 'https://toram-id.com';
-const OUTPUT_PATH = path.join("data", "toramData", "apps_indo.json");
-
 const STOP_AFTER_NOT_FOUND = 200;
+
 let scriptRunning = false;
+let cache = null;
+let lastUpdate = 0;
+const INTERVAL = 2 * 60 * 60 * 1000; // 2 jam
 
 export function isScrapingIndo() {
   return scriptRunning;
 }
 
-async function getItemById(id) {
+export async function getItemByIdIndo(id) {
   try {
     const { data } = await axios.get(`${BASE_URL}/item/${id}`, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'User-Agent': 'Mozilla/5.0',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Referer': BASE_URL,
         'Connection': 'keep-alive'
@@ -54,64 +54,41 @@ async function getItemById(id) {
   }
 }
 
-export async function scrapeAllItems2() {
-  if (scriptRunning) {
-    console.log('Scraper sedang berjalan...');
-    return;
+export async function scrapeAllItemsIndo(force = false) {
+  const IS_SERVERLESS = !!process.env.VERCEL;
+  if (IS_SERVERLESS && !force) {
+    throw new Error('Full scraping (semua item) dilarang di environment serverless. Gunakan getItemByIdIndo(id) atau jalankan di mesin lokal.');
   }
+
+  if (!force && cache && Date.now() - lastUpdate < INTERVAL) {
+    return cache;
+  }
+
+  if (scriptRunning) return [];
   scriptRunning = true;
 
   let id = 1;
   let results = [];
   let notFoundCount = 0;
 
-  const dir = path.dirname(OUTPUT_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-  if (fs.existsSync(OUTPUT_PATH)) {
-    try {
-      results = JSON.parse(fs.readFileSync(OUTPUT_PATH, 'utf-8'));
-    } catch {
-      console.warn('⚠️ File JSON rusak, mulai dari kosong.');
-    }
-  }
-
   while (true) {
-    const existingIndex = results.findIndex(it => it.id === id);
-    const existing = results[existingIndex];
-    const item = await getItemById(id);
+    const item = await getItemByIdIndo(id);
 
     if (!item) {
       notFoundCount++;
-      console.log(`❌ Item ${id} tidak ditemukan (${notFoundCount}/${STOP_AFTER_NOT_FOUND})`);
-      if (notFoundCount >= STOP_AFTER_NOT_FOUND) {
-        console.log('✅ Tidak ada item baru, scraping selesai.');
-        break;
-      }
+      if (notFoundCount >= STOP_AFTER_NOT_FOUND) break;
       id++;
       continue;
     }
 
     notFoundCount = 0;
-
-    if (existing) {
-      const oldData = { ...existing };
-      const newData = { ...item };
-      delete oldData.id;
-      delete newData.id;
-      if (JSON.stringify(oldData) !== JSON.stringify(newData)) {
-        results[existingIndex] = item;
-        console.log(`🔄 Update: ${item.name}`);
-      }
-    } else {
-      results.push(item);
-      console.log(`➕ Tambah: ${item.name}`);
-    }
-
-    fs.writeFileSync(OUTPUT_PATH, JSON.stringify(results, null, 2));
+    results.push(item);
     id++;
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 400));
   }
 
   scriptRunning = false;
+  cache = results;
+  lastUpdate = Date.now();
+  return results;
 }
