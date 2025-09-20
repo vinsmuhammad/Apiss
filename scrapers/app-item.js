@@ -81,4 +81,4 @@ export async function getAppByGlobalId(globalId) {
   }
 
   return null; // id terlalu besar
-}
+      }
