@@ -1,4 +1,4 @@
-import { getAppByGlobalIdIndo } from "../scrape/app-item_indo.js";
+import { getAppByGlobalIdIndo } from "../scrapers/app-item_indo.js";
 
 export default async function handler(req, res) {
   const { id } = req.query;
@@ -9,3 +9,4 @@ export default async function handler(req, res) {
 
   res.status(200).json(app);
 }
+
