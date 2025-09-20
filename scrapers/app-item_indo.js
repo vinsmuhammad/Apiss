@@ -1,17 +1,17 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import fs from 'fs';
-import path from 'path';
 
 const BASE_URL = 'https://toram-id.com';
-const OUTPUT_PATH = path.join("data", "toramData", "items_indo.json");
+let cache = null;
+let lastUpdate = 0;
+const INTERVAL = 2 * 60 * 60 * 1000; // 2 jam
 
 async function fetchPage(page) {
   const url = `${BASE_URL}/items?page=${page}`;
   try {
     const { data } = await axios.get(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'User-Agent': 'Mozilla/5.0',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
         'Referer': BASE_URL,
@@ -43,16 +43,12 @@ async function fetchPage(page) {
   }
 }
 
-export async function scrapeAllAppsIndo() {
-  let results = [];
-  if (fs.existsSync(OUTPUT_PATH)) {
-    try {
-      results = JSON.parse(fs.readFileSync(OUTPUT_PATH, 'utf-8'));
-    } catch {
-      console.warn('⚠️ File JSON lama rusak, mulai dari kosong.');
-    }
+export async function scrapeAllAppsIndo(force = false) {
+  if (!force && cache && Date.now() - lastUpdate < INTERVAL) {
+    return cache;
   }
 
+  let results = [];
   let page = 1;
   let emptyCount = 0;
 
@@ -82,9 +78,11 @@ export async function scrapeAllAppsIndo() {
     }
 
     page++;
-    await new Promise(r => setTimeout(r, 1000));
+    await new Promise(r => setTimeout(r, 600));
   }
 
-  fs.writeFileSync(OUTPUT_PATH, JSON.stringify(results, null, 2));
+  cache = results;
+  lastUpdate = Date.now();
   console.log(`✅ Scraping selesai. Total: ${results.length} items.`);
+  return results;
 }
