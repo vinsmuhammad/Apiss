@@ -2,40 +2,43 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 
 const BASE_URL = "https://coryn.club";
+const PER_PAGE = 20; // jumlah item per halaman
 
-export async function getAppById(id) {
-  try {
-    const { data } = await axios.get(`${BASE_URL}/app_showcase.php?id=${id}`, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      timeout: 8000
-    });
+async function scrapePage(page = 1) {
+  const { data } = await axios.get(`${BASE_URL}/app_showcase.php?page=${page}`, {
+    headers: { "User-Agent": "Mozilla/5.0" },
+    timeout: 8000
+  });
 
-    const $ = cheerio.load(data);
-    const name = $(".accent-bold.title").first().text().trim();
-    const img = $(".app img").attr("src");
+  const $ = cheerio.load(data);
+  const apps = [];
 
-    if (!name || !img) return null;
+  $(".card-container.app-showcase .app").each((i, el) => {
+    const name = $(el).find(".accent-bold.title").text().trim();
+    const rawPath = $(el).find("img").attr("src");
+    if (!name || !rawPath) return;
 
     let fixedLink;
-    if (img.startsWith("app/")) {
-      fixedLink = BASE_URL + "/" + img;
+    if (rawPath.startsWith("app/")) {
+      fixedLink = BASE_URL + "/" + rawPath;
     } else {
-      fixedLink = BASE_URL + "/" + img.replace(/^\//, "");
+      fixedLink = BASE_URL + "/" + rawPath.replace(/^\//, "");
     }
 
-    return { id, nama: name, link: fixedLink };
-  } catch {
-    return null;
-  }
+    apps.push({ nama: name, link: fixedLink });
+  });
+
+  return apps;
 }
 
-export async function getAppByIdWithFallback(requestedId, maxAttempts = 30) {
-  let probeId = Number(requestedId);
-  let attempts = 0;
-  while (attempts < maxAttempts) {
-    const app = await getAppById(probeId);
-    if (app) return { ...app, id: Number(requestedId) };
-    probeId++; attempts++;
-  }
-  return null;
+export async function getAppByGlobalId(globalId) {
+  if (!globalId || globalId < 1) return null;
+
+  const page = Math.ceil(globalId / PER_PAGE);
+  const index = (globalId - 1) % PER_PAGE;
+
+  const apps = await scrapePage(page);
+  if (index < 0 || index >= apps.length) return null;
+
+  return { id: globalId, ...apps[index] };
 }
