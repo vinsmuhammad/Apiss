@@ -1,13 +1,32 @@
 import { scrapeAllAppsIndo } from "../scrapers/app-item_indo.js";
 
+let cache = null;
+let lastUpdate = 0;
+const INTERVAL = 2 * 60 * 60 * 1000;
+
+async function getData(force = false) {
+  if (!force && cache && Date.now() - lastUpdate < INTERVAL) {
+    return cache;
+  }
+  const data = await scrapeAllAppsIndo();
+  cache = data;
+  lastUpdate = Date.now();
+  return data;
+}
+
 export default async function handler(req, res) {
   try {
-    const force = req.query?.force === '1';
-    const data = await scrapeAllAppsIndo(force);
-    res.setHeader('Content-Type', 'application/json');
+    const { id, force } = req.query;
+    const data = await getData(force === "1");
+
+    if (id) {
+      const found = data.find((item) => item.id === Number(id));
+      if (!found) return res.status(404).json({ error: "Tidak ditemukan" });
+      return res.status(200).json(found);
+    }
+
     res.status(200).json(data);
-  } catch (err) {
-    console.error('Gagal scrape apps-indo:', err.message);
-    res.status(500).json({ error: err.message || 'Gagal mengambil data apps-indo' });
+  } catch {
+    res.status(500).json({ error: "Gagal ambil data apps indo" });
   }
 }
