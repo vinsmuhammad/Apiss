@@ -2,10 +2,28 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 
 const BASE_URL = "https://coryn.club";
-const PER_PAGE = 20; // jumlah item per halaman
 
-async function scrapePage(page = 1) {
-  const { data } = await axios.get(`${BASE_URL}/app_showcase.php?page=${page}`, {
+// daftar kategori & type (sesuai asli)
+const APP_TYPES = {
+  ARMOR: 8,
+  ADD: 6,
+  SHIELD: 17,
+  "1H": 4,
+  "2H": 5,
+  BOW: 9,
+  BOWGUN: 10,
+  KNUCKLES: 13,
+  "MAGIC DEVICE": 15,
+  STAFF: 19,
+  HALBERD: 26,
+  KATANA: 27
+};
+
+const PER_PAGE = 20; // Coryn default show=20 per page
+
+async function scrapePage(type, page = 0) {
+  const url = `${BASE_URL}/app_showcase.php?&show=${PER_PAGE}&type=${type}&p=${page}`;
+  const { data } = await axios.get(url, {
     headers: { "User-Agent": "Mozilla/5.0" },
     timeout: 8000
   });
@@ -20,9 +38,10 @@ async function scrapePage(page = 1) {
 
     let fixedLink;
     if (rawPath.startsWith("app/")) {
-      fixedLink = BASE_URL + "/" + rawPath;
+      const filename = rawPath.slice(4);
+      fixedLink = BASE_URL + "/app/" + encodeURIComponent(filename);
     } else {
-      fixedLink = BASE_URL + "/" + rawPath.replace(/^\//, "");
+      fixedLink = BASE_URL + "/" + encodeURIComponent(rawPath.replace(/^\//, ""));
     }
 
     apps.push({ nama: name, link: fixedLink });
@@ -31,14 +50,35 @@ async function scrapePage(page = 1) {
   return apps;
 }
 
+/**
+ * Ambil app global berdasarkan id
+ * id = urutan global (kategori berurutan sesuai APP_TYPES)
+ */
 export async function getAppByGlobalId(globalId) {
   if (!globalId || globalId < 1) return null;
 
-  const page = Math.ceil(globalId / PER_PAGE);
-  const index = (globalId - 1) % PER_PAGE;
+  let remaining = globalId;
+  for (const [category, type] of Object.entries(APP_TYPES)) {
+    let page = 0;
 
-  const apps = await scrapePage(page);
-  if (index < 0 || index >= apps.length) return null;
+    while (true) {
+      const apps = await scrapePage(type, page);
+      if (apps.length === 0) break; // habis di kategori ini
 
-  return { id: globalId, ...apps[index] };
+      if (remaining <= apps.length) {
+        // id jatuh di kategori ini
+        const app = apps[remaining - 1];
+        return {
+          id: globalId,
+          category,
+          ...app
+        };
+      }
+
+      remaining -= apps.length;
+      page++;
+    }
+  }
+
+  return null; // id terlalu besar
 }
