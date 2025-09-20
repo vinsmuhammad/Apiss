@@ -2,10 +2,30 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 
 const BASE_URL = "https://toram-id.com";
-const PER_PAGE = 20; // jumlah item per halaman
+const PER_PAGE = 20;
+
+async function fetchDetailImage(itemUrl) {
+  try {
+    const { data } = await axios.get(BASE_URL + itemUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 15000
+    });
+    const $ = cheerio.load(data);
+
+    // Cari gambar utama di halaman detail
+    const img = $(".row img[data-src]").attr("data-src");
+    if (img && img.includes("/imgs/mobs/")) {
+      return img.startsWith("http") ? img : BASE_URL + img;
+    }
+    return "-";
+  } catch {
+    return "-";
+  }
+}
 
 async function fetchPage(page = 1) {
-  const { data } = await axios.get(`${BASE_URL}/items?page=${page}`, {
+  const url = `${BASE_URL}/items?page=${page}`;
+  const { data } = await axios.get(url, {
     headers: { "User-Agent": "Mozilla/5.0" },
     timeout: 15000
   });
@@ -15,16 +35,21 @@ async function fetchPage(page = 1) {
 
   $(".card .card-body").each((_, el) => {
     const name = $(el).find("a.text-primary").text().trim();
-    const img = $(el).find("img").attr("src");
-    if (!name) return;
+    const href = $(el).find("a.text-primary").attr("href");
+    if (!name || !href) return;
 
-    items.push({
-      nama: name,
-      link: img ? (img.startsWith("http") ? img : BASE_URL + img.replace(/^\//, "")) : null
-    });
+    items.push({ nama: name, href });
   });
 
-  return items;
+  // Ambil gambar detail secara paralel
+  const results = await Promise.all(
+    items.map(async (it) => {
+      const img = await fetchDetailImage(it.href);
+      return { nama: it.nama, link: img };
+    })
+  );
+
+  return results;
 }
 
 export async function getAppByGlobalIdIndo(globalId, maxAttempts = 30) {
