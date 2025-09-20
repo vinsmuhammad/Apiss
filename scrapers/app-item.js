@@ -1,12 +1,11 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import fs from 'fs';
-import path from 'path';
 
 const BASE_URL = 'https://coryn.club';
-const OUTPUT_PATH = path.join("data", "toramData", "apps.json");
+let cache = null;
+let lastUpdate = 0;
+const INTERVAL = 2 * 60 * 60 * 1000; // 2 jam
 
-// daftar kategori & type
 const APP_TYPES = {
   ARMOR: 8,
   ADD: 6,
@@ -25,7 +24,7 @@ const APP_TYPES = {
 async function fetchPage(type, category, page) {
   const url = `${BASE_URL}/app_showcase.php?&show=20&type=${type}&p=${page}`;
   try {
-    const { data } = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const { data } = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 15000 });
     const $ = cheerio.load(data);
     const apps = [];
 
@@ -46,21 +45,18 @@ async function fetchPage(type, category, page) {
 
     return apps;
   } catch (err) {
-    console.error(`Gagal ambil page ${page} untuk ${category}: ${err.message}`);
+    console.error(`Gagal ambil page ${page} untuk type ${type}: ${err.message}`);
     return [];
   }
 }
 
-export async function scrapeAllApps() {
-  let results = [];
-
-  if (fs.existsSync(OUTPUT_PATH)) {
-    try {
-      results = JSON.parse(fs.readFileSync(OUTPUT_PATH, 'utf-8'));
-    } catch {
-      console.warn('⚠️ File JSON lama rusak, mulai dari kosong.');
-    }
+export async function scrapeAllApps(force = false) {
+  // in-memory cache to avoid heavy repeated scrapes on serverless
+  if (!force && cache && Date.now() - lastUpdate < INTERVAL) {
+    return cache;
   }
+
+  let results = [];
 
   for (const [category, type] of Object.entries(APP_TYPES)) {
     console.log(`📥 Scraping kategori: ${category}...`);
@@ -90,9 +86,12 @@ export async function scrapeAllApps() {
         console.log(`  Page ${page} → ${apps.length} item`);
       }
       page++;
+      await new Promise(r => setTimeout(r, 400));
     }
   }
 
-  fs.writeFileSync(OUTPUT_PATH, JSON.stringify(results, null, 2));
+  cache = results;
+  lastUpdate = Date.now();
   console.log(`✅ Scraping selesai. Total: ${results.length} apps.`);
-}
+  return results;
+      }
