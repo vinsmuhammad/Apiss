@@ -48,4 +48,4 @@ export async function getItemByIdWithFallbackIndo(requestedId, maxAttempts = 30)
     attempts++;
   }
   return null;
-            }
+}
