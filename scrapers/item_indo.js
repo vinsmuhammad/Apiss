@@ -2,7 +2,7 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 
 const BASE_URL = "https://toram-id.com";
-const PER_PAGE = 20; // biasanya 20 item per halaman
+const PER_PAGE = 20;
 
 async function fetchItemDetail(url) {
   try {
@@ -10,45 +10,53 @@ async function fetchItemDetail(url) {
       headers: { "User-Agent": "Mozilla/5.0" },
       timeout: 15000
     });
-
     const $ = cheerio.load(data);
 
-    // nama item
-    const name = $("h1.text-primary").first().text().trim();
+    // Nama
+    const name = $("b.h6 a.text-primary").first().text().trim() || "-";
 
-    // harga jual & proses material
-    let sell = null;
-    let process = null;
-    $("table.table tr").each((_, tr) => {
-      const label = $(tr).find("td:first-child").text().trim();
-      const value = $(tr).find("td:last-child").text().trim();
-      if (/Sell/i.test(label)) sell = value || null;
-      if (/Proses|Process/i.test(label)) process = value || null;
-    });
+    // Gambar utama
+    let image = $(".col-md-4 img[data-src]").attr("data-src");
+    if (!image) image = "-";
+    else if (!image.startsWith("http")) image = BASE_URL + image;
 
-    // stats
+    // Status Monster (semua tab yg id mulai dengan status-monster)
     const stats = [];
-    $(".card:contains('Stat') li").each((_, li) => {
-      stats.push($(li).text().trim());
+    $(".tab-pane[id^='status-monster'] dl p").each((_, el) => {
+      stats.push($(el).text().trim());
     });
+    if (stats.length === 0) stats.push("-");
 
-    // drop dari
-    const obtainedFrom = [];
-    $(".card:contains('Drop dari') table tr").each((i, tr) => {
-      if (i === 0) return; // skip header
-      const tds = $(tr).find("td");
-      if (tds.length) {
-        const mob = $(tds[0]).text().trim();
-        const map = $(tds[1]).text().trim();
-        obtainedFrom.push({ mob, map });
+    // Status NPC (semua tab yg id mulai dengan status-npc)
+    const npcStats = [];
+    $(".tab-pane[id^='status-npc'] dl p").each((_, el) => {
+      npcStats.push($(el).text().trim());
+    });
+    if (npcStats.length === 0) npcStats.push("-");
+
+    // Craft: Player (semua tab yg id mulai dengan mats)
+    let process = "-";
+    $(".tab-pane[id^='mats']").each((_, el) => {
+      const content = $(el).text().trim();
+      if (content && !/Tidak ada/i.test(content)) {
+        process = content;
       }
     });
 
+    // Drop dari
+    const obtainedFrom = [];
+    $("details summary:contains('Bisa di peroleh')").parent().find("a").each((_, el) => {
+      const txt = $(el).text().trim();
+      if (txt && !txt.includes("Lihat...")) obtainedFrom.push(txt);
+    });
+    if (obtainedFrom.length === 0) obtainedFrom.push("-");
+
     return {
       name,
-      sell,
-      process,
+      image,
       stats,
+      npcStats,
+      process,
       obtainedFrom
     };
   } catch {
@@ -63,18 +71,13 @@ async function fetchPage(page = 1) {
       headers: { "User-Agent": "Mozilla/5.0" },
       timeout: 15000
     });
-
     const $ = cheerio.load(data);
+
     const items = [];
-
-    $(".card .card-body").each((_, el) => {
-      const name = $(el).find("a.text-primary").text().trim();
-      const href = $(el).find("a.text-primary").attr("href");
-      if (!name || !href) return;
-
-      items.push({ name, href });
+    $(".card .card-body b.h6 a.text-primary").each((_, el) => {
+      const href = $(el).attr("href");
+      if (href) items.push({ href });
     });
-
     return items;
   } catch {
     return [];
@@ -94,9 +97,7 @@ export async function getItemIndoById(globalId, maxAttempts = 30) {
     const items = await fetchPage(page);
     if (index >= 0 && index < items.length) {
       const detail = await fetchItemDetail(items[index].href);
-      if (detail) {
-        return { id: globalId, ...detail };
-      }
+      if (detail) return { id: globalId, ...detail };
     }
 
     probeId++;
