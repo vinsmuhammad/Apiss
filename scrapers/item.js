@@ -1,22 +1,19 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import fs from 'fs';
-import path from 'path';
 
 const BASE_URL = 'https://coryn.club';
-const OUTPUT_PATH = path.join("data", "toramData", "items.json");
-
 const STOP_AFTER_NOT_FOUND = 250;
 const SKIP_BEFORE_ID = 8000;
 
 let scriptRunning = false;
+
 export function isScraping() {
   return scriptRunning;
 }
 
-async function getItemById(id) {
+export async function getItemById(id) {
   try {
-    const { data } = await axios.get(`${BASE_URL}/item.php?id=${id}`, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+    const { data } = await axios.get(`${BASE_URL}/item.php?id=${id}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 15000 });
     const $ = cheerio.load(data);
 
     if ($('body').text().includes('No Result Found')) return null;
@@ -24,8 +21,8 @@ async function getItemById(id) {
     const itemName = $('.card-title').first().text().trim();
     if (!itemName) return null;
 
-    const sell = $('.item-prop .accent-bold:contains("Sell")').parent().find('p').eq(1).text().trim();
-    const process = $('.item-prop .accent-bold:contains("Process")').parent().find('p').eq(1).text().trim();
+    const sell = $('.item-prop .accent-bold:contains("Sell")').parent().find('p').eq(1).text().trim() || null;
+    const process = $('.item-prop .accent-bold:contains("Process")').parent().find('p').eq(1).text().trim() || null;
 
     const stats = [];
     $('.item-basestat > div:not(:first-child)').each((_, el) => {
@@ -53,28 +50,25 @@ async function getItemById(id) {
   }
 }
 
-export async function scrapeAllItems() {
-  if (scriptRunning) return;
+/**
+ * Full scraping (sequential many IDs) is **disabled on serverless** by default because:
+ * - It can run very long and hit timeouts.
+ * - If you really need it, run locally or on a VM and store results externally (S3/DB).
+ */
+export async function scrapeAllItems(force = false) {
+  const IS_SERVERLESS = !!process.env.VERCEL;
+  if (IS_SERVERLESS && !force) {
+    throw new Error('Full scraping is disabled on serverless environments. Use getItemById(id) or run this script locally with force=true.');
+  }
 
+  if (scriptRunning) return [];
   scriptRunning = true;
+
   let id = 1;
   let results = [];
   let notFoundCount = 0;
 
-  const dir = path.dirname(OUTPUT_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-  if (fs.existsSync(OUTPUT_PATH)) {
-    try {
-      results = JSON.parse(fs.readFileSync(OUTPUT_PATH, 'utf-8'));
-    } catch {
-      console.warn('File JSON rusak. Memulai dari kosong.');
-    }
-  }
-
   while (true) {
-    const existingIndex = results.findIndex(it => it.id === id);
-    const existing = results[existingIndex];
     const item = await getItemById(id);
 
     if (!item) {
@@ -86,20 +80,12 @@ export async function scrapeAllItems() {
     }
 
     notFoundCount = 0;
-
-    if (existing) {
-      const oldData = { ...existing };
-      const newData = { ...item };
-      delete oldData.id;
-      delete newData.id;
-      if (JSON.stringify(oldData) !== JSON.stringify(newData)) results[existingIndex] = item;
-    } else {
-      results.push(item);
-    }
-
-    fs.writeFileSync(OUTPUT_PATH, JSON.stringify(results, null, 2));
+    results.push(item);
     id++;
+    // be polite
+    await new Promise(r => setTimeout(r, 300));
   }
 
   scriptRunning = false;
+  return results;
 }
