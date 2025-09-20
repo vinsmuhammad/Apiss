@@ -4,55 +4,87 @@ import * as cheerio from "cheerio";
 const BASE_URL = "https://toram-id.com";
 const PER_PAGE = 20;
 
-async function fetchDetailImage(itemUrl) {
+async function fetchItemDetail(url) {
   try {
-    const { data } = await axios.get(BASE_URL + itemUrl, {
+    const { data } = await axios.get(BASE_URL + url, {
       headers: { "User-Agent": "Mozilla/5.0" },
       timeout: 15000
     });
     const $ = cheerio.load(data);
 
-    // Cari gambar utama di halaman detail
-    const img = $(".row img[data-src]").attr("data-src");
-    if (img && img.includes("/imgs/mobs/")) {
-      return img.startsWith("http") ? img : BASE_URL + img;
-    }
-    return "-";
+    // Nama
+    const name = $("b.h6 a.text-primary").first().text().trim() || "-";
+
+    // Gambar utama
+    let image = $(".col-md-4 img[data-src]").attr("data-src");
+    if (!image) image = "-";
+    else if (!image.startsWith("http")) image = BASE_URL + image;
+
+    // Status Monster (semua tab yg id mulai dengan status-monster)
+    const stats = [];
+    $(".tab-pane[id^='status-monster'] dl p").each((_, el) => {
+      stats.push($(el).text().trim());
+    });
+    if (stats.length === 0) stats.push("-");
+
+    // Status NPC (semua tab yg id mulai dengan status-npc)
+    const npcStats = [];
+    $(".tab-pane[id^='status-npc'] dl p").each((_, el) => {
+      npcStats.push($(el).text().trim());
+    });
+    if (npcStats.length === 0) npcStats.push("-");
+
+    // Craft: Player (semua tab yg id mulai dengan mats)
+    let process = "-";
+    $(".tab-pane[id^='mats']").each((_, el) => {
+      const content = $(el).text().trim();
+      if (content && !/Tidak ada/i.test(content)) {
+        process = content;
+      }
+    });
+
+    // Drop dari
+    const obtainedFrom = [];
+    $("details summary:contains('Bisa di peroleh')").parent().find("a").each((_, el) => {
+      const txt = $(el).text().trim();
+      if (txt && !txt.includes("Lihat...")) obtainedFrom.push(txt);
+    });
+    if (obtainedFrom.length === 0) obtainedFrom.push("-");
+
+    return {
+      name,
+      image,
+      stats,
+      npcStats,
+      process,
+      obtainedFrom
+    };
   } catch {
-    return "-";
+    return null;
   }
 }
 
 async function fetchPage(page = 1) {
   const url = `${BASE_URL}/items?page=${page}`;
-  const { data } = await axios.get(url, {
-    headers: { "User-Agent": "Mozilla/5.0" },
-    timeout: 15000
-  });
+  try {
+    const { data } = await axios.get(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 15000
+    });
+    const $ = cheerio.load(data);
 
-  const $ = cheerio.load(data);
-  const items = [];
-
-  $(".card .card-body").each((_, el) => {
-    const name = $(el).find("a.text-primary").text().trim();
-    const href = $(el).find("a.text-primary").attr("href");
-    if (!name || !href) return;
-
-    items.push({ nama: name, href });
-  });
-
-  // Ambil gambar detail secara paralel
-  const results = await Promise.all(
-    items.map(async (it) => {
-      const img = await fetchDetailImage(it.href);
-      return { nama: it.nama, link: img };
-    })
-  );
-
-  return results;
+    const items = [];
+    $(".card .card-body b.h6 a.text-primary").each((_, el) => {
+      const href = $(el).attr("href");
+      if (href) items.push({ href });
+    });
+    return items;
+  } catch {
+    return [];
+  }
 }
 
-export async function getAppByGlobalIdIndo(globalId, maxAttempts = 30) {
+export async function getItemIndoById(globalId, maxAttempts = 30) {
   if (!globalId || globalId < 1) return null;
 
   let probeId = Number(globalId);
@@ -64,7 +96,8 @@ export async function getAppByGlobalIdIndo(globalId, maxAttempts = 30) {
 
     const items = await fetchPage(page);
     if (index >= 0 && index < items.length) {
-      return { id: globalId, ...items[index] };
+      const detail = await fetchItemDetail(items[index].href);
+      if (detail) return { id: globalId, ...detail };
     }
 
     probeId++;
