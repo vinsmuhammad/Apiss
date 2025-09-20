@@ -1,21 +1,32 @@
-import { getAppById } from "../scrapers/app-item.js";
+import { scrapeAllApps } from "../scrapers/app-item.js";
+
+let cache = null;
+let lastUpdate = 0;
+const INTERVAL = 2 * 60 * 60 * 1000;
+
+async function getData(force = false) {
+  if (!force && cache && Date.now() - lastUpdate < INTERVAL) {
+    return cache;
+  }
+  const data = await scrapeAllApps();
+  cache = data;
+  lastUpdate = Date.now();
+  return data;
+}
 
 export default async function handler(req, res) {
   try {
-    const { id } = req.query;
-    if (!id) {
-      return res.status(400).json({ error: "Gunakan ?id=123 untuk ambil 1 app" });
+    const { id, force } = req.query;
+    const data = await getData(force === "1");
+
+    if (id) {
+      const found = data.find((item) => item.id === Number(id));
+      if (!found) return res.status(404).json({ error: "Tidak ditemukan" });
+      return res.status(200).json(found);
     }
 
-    const app = await getAppById(Number(id));
-    if (!app) {
-      return res.status(404).json({ error: "App tidak ditemukan" });
-    }
-
-    res.setHeader("Content-Type", "application/json");
-    res.status(200).json(app);
-  } catch (err) {
-    console.error("Gagal scrape app:", err.message);
-    res.status(500).json({ error: "Gagal mengambil data app" });
+    res.status(200).json(data);
+  } catch {
+    res.status(500).json({ error: "Gagal ambil data apps" });
   }
 }
