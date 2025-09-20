@@ -1,4 +1,4 @@
-import { getItemByIdWithFallback } from "../scrape/item.js";
+import { getItemByIdWithFallback } from "../scrapers/item.js";
 
 export default async function handler(req, res) {
   const { id } = req.query;
@@ -9,3 +9,4 @@ export default async function handler(req, res) {
 
   res.status(200).json(item);
 }
+
