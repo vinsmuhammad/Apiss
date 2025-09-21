@@ -34,8 +34,12 @@ export async function fetchMonstersPage(page = 1) {
       const element = $(el).find("b:contains('Unsur:')").next("span").text().trim() || "-";
       const hp = $(el).find("b:contains('HP:')").next("span").text().trim() || "-";
       const xp = $(el).find("b:contains('XP:')").next("span").text().trim() || "-";
-      const leveling =
-        $(el).find("b:contains('Leveling:')").parent().text().replace("Leveling:", "").trim() || "-";
+      const leveling = $(el)
+        .find("b:contains('Leveling:')")
+        .parent()
+        .text()
+        .replace("Leveling:", "")
+        .trim() || "-";
       const map = $(el).find("b:contains('Peta:')").parent().find("a").text().trim() || "-";
 
       // Drop item
@@ -93,4 +97,4 @@ export async function getMonsterIndoById(requestedId, maxAttempts = 30) {
   }
 
   return "not found";
-}
+        }
