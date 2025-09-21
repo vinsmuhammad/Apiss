@@ -102,7 +102,10 @@ async function fetchPage(page = 1) {
 export async function getItemIndoById(globalId, maxFallback = 30) {
   if (!globalId || globalId < 1) return "not found";
 
+  const visited = new Set(); // buat cegah duplikat hasil
+
   for (let offset = 0; offset <= maxFallback; offset++) {
+    // ubah urutan kalau mau belakang dulu => [-1, 1]
     for (const sign of [1, -1]) {
       if (offset === 0 && sign === -1) continue;
       const probeId = globalId + offset * sign;
@@ -110,15 +113,28 @@ export async function getItemIndoById(globalId, maxFallback = 30) {
 
       const page = Math.ceil(probeId / PER_PAGE);
       const index = (probeId - 1) % PER_PAGE;
+      const key = `${page}:${index}`;
+
+      if (visited.has(key)) continue; // sudah dipakai buat fallback lain
+      visited.add(key);
 
       const items = await fetchPage(page);
       if (index >= 0 && index < items.length) {
-        return { id: globalId, ...items[index] };
+        const item = items[index];
+
+        // validasi item kosong
+        const isEmpty =
+          (!item.name || item.name === "-") &&
+          item.stats.length === 1 && item.stats[0] === "-" &&
+          item.obtainedFrom.length === 1 && item.obtainedFrom[0] === "-";
+
+        if (!isEmpty) {
+          return { id: globalId, ...item };
+        }
       }
     }
   }
 
-  // kalau sampai sini artinya sudah lebih dari maxFallback dan tetap ga ketemu
+  // kalau semua fallback gagal
   return "not found";
 }
-
