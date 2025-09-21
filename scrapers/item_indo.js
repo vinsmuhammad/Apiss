@@ -21,8 +21,7 @@ async function fetchObtainedFromDetail(relativeUrl) {
       }
     });
     return results.length ? results : ["-"];
-  } catch (e) {
-    console.error("fetchObtainedFromDetail error:", e.message);
+  } catch {
     return ["-"];
   }
 }
@@ -38,8 +37,11 @@ async function fetchPage(page = 1) {
 
     const items = [];
     $(".card").each((_, el) => {
-      // Nama
-      const name = $(el).find("b.h6 a.text-primary").text().trim() || "-";
+      // Ambil id asli dari href
+      const anchor = $(el).find("b.h6 a.text-primary");
+      const name = anchor.text().trim() || "-";
+      const href = anchor.attr("href") || "";
+      const realId = href ? parseInt(href.split("/").pop(), 10) : null;
 
       // Status Monster
       const stats = [];
@@ -49,7 +51,7 @@ async function fetchPage(page = 1) {
           const txt = $(p).text().trim();
           if (txt) stats.push(txt);
         });
-      if (stats.length === 0) stats.push("-");
+      if (!stats.length) stats.push("-");
 
       // Drop / diperoleh dari
       const obtainedFrom = [];
@@ -59,18 +61,18 @@ async function fetchPage(page = 1) {
         .find("div.my-2 a")
         .each((_, a) => {
           const txt = $(a).text().trim();
-          const href = $(a).attr("href");
+          const hrefA = $(a).attr("href");
           const map = $(a).parent().find("small").text().trim();
 
-          if (txt && txt.toLowerCase().includes("lihat") && href) {
-            // placeholder: nanti akan diisi setelah fetch detail
-            obtainedFrom.push({ type: "lihat", href });
+          if (txt && txt.toLowerCase().includes("lihat") && hrefA) {
+            obtainedFrom.push({ type: "lihat", href: hrefA });
           } else if (txt && !txt.includes("Lihat")) {
             obtainedFrom.push(map ? `${txt} ${map}` : txt);
           }
         });
 
       items.push({
+        id: realId,
         name,
         stats,
         obtainedFrom
@@ -93,8 +95,7 @@ async function fetchPage(page = 1) {
     }
 
     return items;
-  } catch (e) {
-    console.error("fetchPage error:", e.message);
+  } catch {
     return [];
   }
 }
@@ -102,41 +103,22 @@ async function fetchPage(page = 1) {
 export async function getItemIndoById(globalId, maxFallback = 30) {
   if (!globalId || globalId < 1) return "not found";
 
-  const visited = new Set();
-  let lastName = null;
-
   for (let offset = 0; offset <= maxFallback; offset++) {
-    for (const sign of [1, -1]) {
-      if (offset === 0 && sign === -1) continue;
+    for (const sign of [0, 1, -1]) {
+      if (offset === 0 && sign !== 0) continue;
+
       const probeId = globalId + offset * sign;
       if (probeId < 1) continue;
 
       const page = Math.ceil(probeId / PER_PAGE);
-      const index = (probeId - 1) % PER_PAGE;
-      const key = `${page}:${index}`;
-
-      if (visited.has(key)) continue;
-      visited.add(key);
-
       const items = await fetchPage(page);
-      if (index >= 0 && index < items.length) {
-        const item = items[index];
 
-        // skip kalau kosong
-        const isEmpty =
-          (!item.name || item.name === "-") &&
-          item.stats.length === 1 && item.stats[0] === "-" &&
-          item.obtainedFrom.length === 1 && item.obtainedFrom[0] === "-";
-        if (isEmpty) continue;
-
-        // skip kalau nama sama dengan hasil sebelumnya
-        if (lastName && item.name === lastName) continue;
-
-        lastName = item.name;
-        return { id: globalId, ...item };
+      const found = items.find(it => it.id === globalId);
+      if (found) {
+        return found;
       }
     }
   }
 
   return "not found";
-}
+        }
