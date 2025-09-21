@@ -2,71 +2,121 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 
 const BASE_URL = "https://toram-id.com";
+const PER_PAGE = 20;
 
-/**
- * Ambil data item berdasarkan ID
- */
-export async function getItemIndoByIdRaw(id) {
+async function fetchObtainedFromDetail(relativeUrl) {
   try {
-    const page = Math.ceil(id / 20);
-    const index = (id - 1) % 20;
-
-    const { data } = await axios.get(`${BASE_URL}/items?page=${page}`, {
+    const { data } = await axios.get(BASE_URL + relativeUrl, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      timeout: 15000,
+      timeout: 15000
     });
-
     const $ = cheerio.load(data);
-    const cards = $(".card");
 
-    if (index >= cards.length) return null;
-
-    const el = cards.eq(index);
-
-    // Nama
-    const name = el.find("b.h6 a.text-primary").text().trim() || "-";
-
-    // Status
-    const stats = [];
-    el.find(".tab-pane[id^='status-monster'] dl p").each((_, p) => {
-      const txt = $(p).text().trim();
-      if (txt) stats.push(txt);
+    const results = [];
+    $(".card:contains('Drop Dari') .card-body .mb-5").each((_, el) => {
+      const monster = $(el).find("dt a.text-primary").text().trim();
+      const map = $(el).find("dd b:contains('Peta:')").parent().find("a").text().trim();
+      if (monster) {
+        results.push(map ? `${monster} [${map}]` : monster);
+      }
     });
-    if (stats.length === 0) stats.push("-");
+    return results.length ? results : ["-"];
+  } catch (e) {
+    console.error("fetchObtainedFromDetail error:", e.message);
+    return ["-"];
+  }
+}
 
-    // Drop / diperoleh dari
-    const obtainedFrom = [];
-    el.find("details summary:contains('Bisa di peroleh')")
-      .parent()
-      .find("div.my-2 a")
-      .each((_, a) => {
-        const txt = $(a).text().trim();
-        const map = $(a).parent().find("small").text().trim();
-        if (txt) obtainedFrom.push(map ? `${txt} ${map}` : txt);
+async function fetchPage(page = 1) {
+  const url = `${BASE_URL}/items?page=${page}`;
+  try {
+    const { data } = await axios.get(url, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 15000
+    });
+    const $ = cheerio.load(data);
+
+    const items = [];
+    $(".card").each((_, el) => {
+      // Nama
+      const name = $(el).find("b.h6 a.text-primary").text().trim() || "-";
+
+      // Status Monster
+      const stats = [];
+      $(el)
+        .find(".tab-pane[id^='status-monster'] dl p")
+        .each((_, p) => {
+          const txt = $(p).text().trim();
+          if (txt) stats.push(txt);
+        });
+      if (stats.length === 0) stats.push("-");
+
+      // Drop / diperoleh dari
+      const obtainedFrom = [];
+      $(el)
+        .find("details summary:contains('Bisa di peroleh')")
+        .parent()
+        .find("div.my-2 a")
+        .each((_, a) => {
+          const txt = $(a).text().trim();
+          const href = $(a).attr("href");
+          const map = $(a).parent().find("small").text().trim();
+
+          if (txt && txt.toLowerCase().includes("lihat") && href) {
+            // placeholder: nanti akan diisi setelah fetch detail
+            obtainedFrom.push({ type: "lihat", href });
+          } else if (txt && !txt.includes("Lihat")) {
+            obtainedFrom.push(map ? `${txt} ${map}` : txt);
+          }
+        });
+
+      items.push({
+        name,
+        stats,
+        obtainedFrom
       });
-    if (obtainedFrom.length === 0) obtainedFrom.push("-");
+    });
 
-    return { id, name, stats, obtainedFrom };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Ambil data item dengan fallback increment (cek ID berikutnya jika tidak ada)
- */
-export async function getItemIndoById(requestedId, maxAttempts = 30) {
-  let probeId = Number(requestedId);
-  let attempts = 0;
-
-  while (attempts < maxAttempts) {
-    const item = await getItemIndoByIdRaw(probeId);
-    if (item) {
-      return { ...item, id: Number(requestedId) };
+    // resolve semua "Lihat..."
+    for (const item of items) {
+      const newList = [];
+      for (const entry of item.obtainedFrom) {
+        if (typeof entry === "object" && entry.type === "lihat") {
+          const drops = await fetchObtainedFromDetail(entry.href);
+          newList.push(...drops);
+        } else {
+          newList.push(entry);
+        }
+      }
+      if (!newList.length) newList.push("-");
+      item.obtainedFrom = newList;
     }
-    probeId++;
-    attempts++;
+
+    return items;
+  } catch (e) {
+    console.error("fetchPage error:", e.message);
+    return [];
+  }
+}
+
+export async function getItemIndoById(globalId, maxFallback = 30) {
+  if (!globalId || globalId < 1) return null;
+
+  for (let offset = 0; offset <= maxFallback; offset++) {
+    for (const sign of [1, -1]) {
+      if (offset === 0 && sign === -1) continue;
+      const probeId = globalId + offset * sign;
+      if (probeId < 1) continue;
+
+      const page = Math.ceil(probeId / PER_PAGE);
+      const index = (probeId - 1) % PER_PAGE;
+
+      const items = await fetchPage(page);
+      if (index >= 0 && index < items.length) {
+        return { id: globalId, ...items[index] };
+      }
+    }
   }
 
-  return "not found";
-}
+  return null;
+    }
