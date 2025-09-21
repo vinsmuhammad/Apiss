@@ -15,25 +15,8 @@ async function fetchPage(page = 1) {
 
     const items = [];
     $(".card").each((_, el) => {
-      // Nama & href
-      const anchor = $(el).find("b.h6 a.text-primary");
-      const name = anchor.text().trim() || "-";
-      const href = anchor.attr("href") || "-";
-
-      // Icon / gambar kecil
-      let icon = $(el).find("img.avatar").attr("src") || "-";
-      if (icon !== "-" && !icon.startsWith("http")) {
-        icon = BASE_URL + icon;
-      }
-
-      // Gambar utama (lazyload pakai data-src)
-      let image =
-        $(el).find("img[data-src]").attr("data-src") ||
-        $(el).find("img.rounded").attr("src") ||
-        "-";
-      if (image !== "-" && !image.startsWith("http")) {
-        image = BASE_URL + image;
-      }
+      // Nama
+      const name = $(el).find("b.h6 a.text-primary").text().trim() || "-";
 
       // Status Monster
       const stats = [];
@@ -44,27 +27,6 @@ async function fetchPage(page = 1) {
           if (txt) stats.push(txt);
         });
       if (stats.length === 0) stats.push("-");
-
-      // Status NPC
-      const npcStats = [];
-      $(el)
-        .find(".tab-pane[id^='status-npc'] dl p")
-        .each((_, p) => {
-          const txt = $(p).text().trim();
-          if (txt) npcStats.push(txt);
-        });
-      if (npcStats.length === 0) {
-        if ($(el).find(".tab-pane[id^='status-npc']").text().match(/tidak ada/i)) {
-          npcStats.push("-");
-        }
-      }
-
-      // Craft Player
-      let process = "-";
-      const mats = $(el).find(".tab-pane[id^='mats']").text().trim();
-      if (mats && !/Tidak ada/i.test(mats)) {
-        process = mats.replace(/\s+/g, " ").trim();
-      }
 
       // Drop / diperoleh dari
       const obtainedFrom = [];
@@ -83,12 +45,7 @@ async function fetchPage(page = 1) {
 
       items.push({
         name,
-        href,
-        icon,
-        image,
         stats,
-        npcStats,
-        process,
         obtainedFrom
       });
     });
@@ -100,15 +57,25 @@ async function fetchPage(page = 1) {
   }
 }
 
-export async function getItemIndoById(globalId) {
+export async function getItemIndoById(globalId, maxFallback = 30) {
   if (!globalId || globalId < 1) return null;
 
-  const page = Math.ceil(globalId / PER_PAGE);
-  const index = (globalId - 1) % PER_PAGE;
+  // Urutan pencarian: 0, +1, -1, +2, -2, dst sampai maxFallback
+  for (let offset = 0; offset <= maxFallback; offset++) {
+    for (const sign of [1, -1]) {
+      if (offset === 0 && sign === -1) continue; // skip duplikat 0
+      const probeId = globalId + offset * sign;
+      if (probeId < 1) continue;
 
-  const items = await fetchPage(page);
-  if (index >= 0 && index < items.length) {
-    return { id: globalId, ...items[index] };
+      const page = Math.ceil(probeId / PER_PAGE);
+      const index = (probeId - 1) % PER_PAGE;
+
+      const items = await fetchPage(page);
+      if (index >= 0 && index < items.length) {
+        // id output SELALU pakai globalId, bukan probeId
+        return { id: globalId, ...items[index] };
+      }
+    }
   }
 
   return null;
