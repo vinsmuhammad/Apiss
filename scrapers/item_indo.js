@@ -4,6 +4,29 @@ import * as cheerio from "cheerio";
 const BASE_URL = "https://toram-id.com";
 const PER_PAGE = 20;
 
+async function fetchObtainedFromDetail(relativeUrl) {
+  try {
+    const { data } = await axios.get(BASE_URL + relativeUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 15000
+    });
+    const $ = cheerio.load(data);
+
+    const results = [];
+    $(".card:contains('Drop Dari') .card-body .mb-5").each((_, el) => {
+      const monster = $(el).find("dt a.text-primary").text().trim();
+      const map = $(el).find("dd b:contains('Peta:')").parent().find("a").text().trim();
+      if (monster) {
+        results.push(map ? `${monster} [${map}]` : monster);
+      }
+    });
+    return results.length ? results : ["-"];
+  } catch (e) {
+    console.error("fetchObtainedFromDetail error:", e.message);
+    return ["-"];
+  }
+}
+
 async function fetchPage(page = 1) {
   const url = `${BASE_URL}/items?page=${page}`;
   try {
@@ -33,15 +56,19 @@ async function fetchPage(page = 1) {
       $(el)
         .find("details summary:contains('Bisa di peroleh')")
         .parent()
-        .find("div.my-2")
-        .each((_, div) => {
-          const monster = $(div).find("a").first().text().trim();
-          const map = $(div).find("small").text().trim();
-          if (monster) {
-            obtainedFrom.push(map ? `${monster} ${map}` : monster);
+        .find("div.my-2 a")
+        .each((_, a) => {
+          const txt = $(a).text().trim();
+          const href = $(a).attr("href");
+          const map = $(a).parent().find("small").text().trim();
+
+          if (txt && txt.toLowerCase().includes("lihat") && href) {
+            // placeholder: nanti akan diisi setelah fetch detail
+            obtainedFrom.push({ type: "lihat", href });
+          } else if (txt && !txt.includes("Lihat")) {
+            obtainedFrom.push(map ? `${txt} ${map}` : txt);
           }
         });
-      if (obtainedFrom.length === 0) obtainedFrom.push("-");
 
       items.push({
         name,
@@ -49,6 +76,21 @@ async function fetchPage(page = 1) {
         obtainedFrom
       });
     });
+
+    // resolve semua "Lihat..."
+    for (const item of items) {
+      const newList = [];
+      for (const entry of item.obtainedFrom) {
+        if (typeof entry === "object" && entry.type === "lihat") {
+          const drops = await fetchObtainedFromDetail(entry.href);
+          newList.push(...drops);
+        } else {
+          newList.push(entry);
+        }
+      }
+      if (!newList.length) newList.push("-");
+      item.obtainedFrom = newList;
+    }
 
     return items;
   } catch (e) {
@@ -60,10 +102,9 @@ async function fetchPage(page = 1) {
 export async function getItemIndoById(globalId, maxFallback = 30) {
   if (!globalId || globalId < 1) return null;
 
-  // Urutan pencarian: 0, +1, -1, +2, -2, dst sampai maxFallback
   for (let offset = 0; offset <= maxFallback; offset++) {
     for (const sign of [1, -1]) {
-      if (offset === 0 && sign === -1) continue; // skip duplikat 0
+      if (offset === 0 && sign === -1) continue;
       const probeId = globalId + offset * sign;
       if (probeId < 1) continue;
 
@@ -72,7 +113,6 @@ export async function getItemIndoById(globalId, maxFallback = 30) {
 
       const items = await fetchPage(page);
       if (index >= 0 && index < items.length) {
-        // id output SELALU pakai globalId, bukan probeId
         return { id: globalId, ...items[index] };
       }
     }
