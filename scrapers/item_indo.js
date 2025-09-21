@@ -37,13 +37,11 @@ async function fetchPage(page = 1) {
 
     const items = [];
     $(".card").each((_, el) => {
-      // Ambil id asli dari href
       const anchor = $(el).find("b.h6 a.text-primary");
       const name = anchor.text().trim() || "-";
       const href = anchor.attr("href") || "";
       const realId = href ? parseInt(href.split("/").pop(), 10) : null;
 
-      // Status Monster
       const stats = [];
       $(el)
         .find(".tab-pane[id^='status-monster'] dl p")
@@ -53,7 +51,6 @@ async function fetchPage(page = 1) {
         });
       if (!stats.length) stats.push("-");
 
-      // Drop / diperoleh dari
       const obtainedFrom = [];
       $(el)
         .find("details summary:contains('Bisa di peroleh')")
@@ -79,7 +76,7 @@ async function fetchPage(page = 1) {
       });
     });
 
-    // resolve semua "Lihat..."
+    // Resolve "Lihat..." links
     for (const item of items) {
       const newList = [];
       for (const entry of item.obtainedFrom) {
@@ -100,25 +97,26 @@ async function fetchPage(page = 1) {
   }
 }
 
-export async function getItemIndoById(globalId, maxFallback = 30) {
-  if (!globalId || globalId < 1) return "not found";
+// === Main Export ===
+// Forward-only fallback ala Coryn.club
+export async function getItemIndoById(requestedId, maxAttempts = 30) {
+  if (!requestedId || requestedId < 1) return "not found";
 
-  for (let offset = 0; offset <= maxFallback; offset++) {
-    for (const sign of [0, 1, -1]) {
-      if (offset === 0 && sign !== 0) continue;
+  let probeId = Number(requestedId);
+  let attempts = 0;
 
-      const probeId = globalId + offset * sign;
-      if (probeId < 1) continue;
+  while (attempts < maxAttempts) {
+    const page = Math.ceil(probeId / PER_PAGE);
+    const items = await fetchPage(page);
 
-      const page = Math.ceil(probeId / PER_PAGE);
-      const items = await fetchPage(page);
-
-      const found = items.find(it => it.id === globalId);
-      if (found) {
-        return found;
-      }
+    const found = items.find(it => it.id === probeId);
+    if (found) {
+      return { ...found, id: requestedId }; // id tetap requested
     }
+
+    probeId++;
+    attempts++;
   }
 
   return "not found";
-        }
+}
