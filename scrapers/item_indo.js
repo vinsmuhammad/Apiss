@@ -100,7 +100,7 @@ async function fetchPage(page = 1) {
 }
 
 export async function getItemIndoById(globalId, maxFallback = 30) {
-  if (!globalId || globalId < 1) return null;
+  if (!globalId || globalId < 1) return "not found";
 
   for (let offset = 0; offset <= maxFallback; offset++) {
     for (const sign of [1, -1]) {
@@ -118,5 +118,7 @@ export async function getItemIndoById(globalId, maxFallback = 30) {
     }
   }
 
-  return null;
+  // kalau sampai sini artinya sudah lebih dari maxFallback dan tetap ga ketemu
+  return "not found";
 }
+
