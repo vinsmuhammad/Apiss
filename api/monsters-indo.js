@@ -1,4 +1,4 @@
-import { getMonsterIndoById } from "../scrapers/monsters.js";
+import { getMonsterIndoById } from "../scrapers/monsters-indo.js";
 
 export default async function handler(req, res) {
   const { id } = req.query;
