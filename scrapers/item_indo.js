@@ -100,7 +100,10 @@ async function fetchPage(page = 1) {
 }
 
 export async function getItemIndoById(globalId, maxFallback = 30) {
-  if (!globalId || globalId < 1) return null;
+  if (!globalId || globalId < 1) return "not found";
+
+  const visited = new Set();
+  let lastName = null;
 
   for (let offset = 0; offset <= maxFallback; offset++) {
     for (const sign of [1, -1]) {
@@ -110,13 +113,30 @@ export async function getItemIndoById(globalId, maxFallback = 30) {
 
       const page = Math.ceil(probeId / PER_PAGE);
       const index = (probeId - 1) % PER_PAGE;
+      const key = `${page}:${index}`;
+
+      if (visited.has(key)) continue;
+      visited.add(key);
 
       const items = await fetchPage(page);
       if (index >= 0 && index < items.length) {
-        return { id: globalId, ...items[index] };
+        const item = items[index];
+
+        // skip kalau kosong
+        const isEmpty =
+          (!item.name || item.name === "-") &&
+          item.stats.length === 1 && item.stats[0] === "-" &&
+          item.obtainedFrom.length === 1 && item.obtainedFrom[0] === "-";
+        if (isEmpty) continue;
+
+        // skip kalau nama sama dengan hasil sebelumnya
+        if (lastName && item.name === lastName) continue;
+
+        lastName = item.name;
+        return { id: globalId, ...item };
       }
     }
   }
 
-  return null;
+  return "not found";
 }
