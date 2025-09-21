@@ -1,4 +1,4 @@
-import { getMonsterByIdWithFallback } from "../scrapers/monster.js";
+import { getMonsterByIdWithFallback } from "../scrapers/monsters.js";
 
 export default async function handler(req, res) {
   const { id } = req.query;
