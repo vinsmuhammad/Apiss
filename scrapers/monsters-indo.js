@@ -24,28 +24,26 @@ export async function fetchMonstersPage(page = 1) {
       const idMatch = link ? link.match(/\/monster\/(\d+)/) : null;
       const id = idMatch ? parseInt(idMatch[1]) : null;
 
-      // Tipe monster (Boss, Mini Boss, Normal)
+      // Tipe monster
       const typeImg = $(el).find("b.h6 img").attr("src") || "";
       let type = "Normal";
       if (typeImg.includes("boss.png")) type = "Boss";
       else if (typeImg.includes("f_boss.png")) type = "Mini Boss";
 
-      // Info lainnya
-      const element = $(el).find("b:contains('Unsur:')").next("span").text().trim() || "-";
-      const hp = $(el).find("b:contains('HP:')").next("span").text().trim() || "-";
-      const xp = $(el).find("b:contains('XP:')").next("span").text().trim() || "-";
-      const leveling = $(el)
-        .find("b:contains('Leveling:')")
-        .parent()
-        .text()
-        .replace("Leveling:", "")
-        .trim() || "-";
-      const map = $(el).find("b:contains('Peta:')").parent().find("a").text().trim() || "-";
+      // Info lainnya (dibersihkan dari newline & spasi panjang)
+      const clean = (txt) => txt.replace(/\s+/g, " ").trim();
+
+      const element = clean($(el).find("b:contains('Unsur:')").next("span").text()) || "-";
+      const hp = clean($(el).find("b:contains('HP:')").next("span").text()) || "-";
+      const xp = clean($(el).find("b:contains('XP:')").next("span").text()) || "-";
+      const leveling =
+        clean($(el).find("b:contains('Leveling:')").parent().text().replace("Leveling:", "")) || "-";
+      const map = clean($(el).find("b:contains('Peta:')").parent().find("a").text()) || "-";
 
       // Drop item
       const drops = [];
       $(el).find("b:contains('Drop:')").parent().find("a").each((_, a) => {
-        const itemName = $(a).text().trim();
+        const itemName = clean($(a).text());
         if (itemName) drops.push(itemName);
       });
       if (!drops.length) drops.push("-");
