@@ -99,24 +99,29 @@ async function fetchPage(page = 1) {
   }
 }
 
-export async function getItemIndoById(globalId, maxFallback = 30) {
-  if (!globalId || globalId < 1) return null;
+export async function getItemIndoById(requestedId, maxAttempts = 30) {
+  if (!requestedId || requestedId < 1) return "not found";
 
-  for (let offset = 0; offset <= maxFallback; offset++) {
-    for (const sign of [1, -1]) {
-      if (offset === 0 && sign === -1) continue;
-      const probeId = globalId + offset * sign;
-      if (probeId < 1) continue;
+  let probeId = Number(requestedId);
+  let attempts = 0;
 
-      const page = Math.ceil(probeId / PER_PAGE);
-      const index = (probeId - 1) % PER_PAGE;
+  while (attempts < maxAttempts) {
+    const page = Math.ceil(probeId / PER_PAGE);
+    const index = (probeId - 1) % PER_PAGE;
 
-      const items = await fetchPage(page);
-      if (index >= 0 && index < items.length) {
-        return { id: globalId, ...items[index] };
+    const items = await fetchPage(page);
+    if (index >= 0 && index < items.length) {
+      const item = items[index];
+
+      // kalau valid, return dengan id tetap = requestedId
+      if (item && item.name && item.name !== "-") {
+        return { id: requestedId, ...item };
       }
     }
+
+    probeId++;
+    attempts++;
   }
 
-  return null;
-    }
+  return "not found";
+}
