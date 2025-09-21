@@ -21,7 +21,8 @@ async function fetchObtainedFromDetail(relativeUrl) {
       }
     });
     return results.length ? results : ["-"];
-  } catch {
+  } catch (e) {
+    console.error("fetchObtainedFromDetail error:", e.message);
     return ["-"];
   }
 }
@@ -37,11 +38,10 @@ async function fetchPage(page = 1) {
 
     const items = [];
     $(".card").each((_, el) => {
-      const anchor = $(el).find("b.h6 a.text-primary");
-      const name = anchor.text().trim() || "-";
-      const href = anchor.attr("href") || "";
-      const realId = href ? parseInt(href.split("/").pop(), 10) : null;
+      // Nama
+      const name = $(el).find("b.h6 a.text-primary").text().trim() || "-";
 
+      // Status Monster
       const stats = [];
       $(el)
         .find(".tab-pane[id^='status-monster'] dl p")
@@ -49,8 +49,9 @@ async function fetchPage(page = 1) {
           const txt = $(p).text().trim();
           if (txt) stats.push(txt);
         });
-      if (!stats.length) stats.push("-");
+      if (stats.length === 0) stats.push("-");
 
+      // Drop / diperoleh dari
       const obtainedFrom = [];
       $(el)
         .find("details summary:contains('Bisa di peroleh')")
@@ -58,25 +59,25 @@ async function fetchPage(page = 1) {
         .find("div.my-2 a")
         .each((_, a) => {
           const txt = $(a).text().trim();
-          const hrefA = $(a).attr("href");
+          const href = $(a).attr("href");
           const map = $(a).parent().find("small").text().trim();
 
-          if (txt && txt.toLowerCase().includes("lihat") && hrefA) {
-            obtainedFrom.push({ type: "lihat", href: hrefA });
+          if (txt && txt.toLowerCase().includes("lihat") && href) {
+            // placeholder: nanti akan diisi setelah fetch detail
+            obtainedFrom.push({ type: "lihat", href });
           } else if (txt && !txt.includes("Lihat")) {
             obtainedFrom.push(map ? `${txt} ${map}` : txt);
           }
         });
 
       items.push({
-        id: realId,
         name,
         stats,
         obtainedFrom
       });
     });
 
-    // Resolve "Lihat..." links
+    // resolve semua "Lihat..."
     for (const item of items) {
       const newList = [];
       for (const entry of item.obtainedFrom) {
@@ -92,31 +93,30 @@ async function fetchPage(page = 1) {
     }
 
     return items;
-  } catch {
+  } catch (e) {
+    console.error("fetchPage error:", e.message);
     return [];
   }
 }
 
-// === Main Export ===
-// Forward-only fallback ala Coryn.club
-export async function getItemIndoById(requestedId, maxAttempts = 30) {
-  if (!requestedId || requestedId < 1) return "not found";
+export async function getItemIndoById(globalId, maxFallback = 30) {
+  if (!globalId || globalId < 1) return null;
 
-  let probeId = Number(requestedId);
-  let attempts = 0;
+  for (let offset = 0; offset <= maxFallback; offset++) {
+    for (const sign of [1, -1]) {
+      if (offset === 0 && sign === -1) continue;
+      const probeId = globalId + offset * sign;
+      if (probeId < 1) continue;
 
-  while (attempts < maxAttempts) {
-    const page = Math.ceil(probeId / PER_PAGE);
-    const items = await fetchPage(page);
+      const page = Math.ceil(probeId / PER_PAGE);
+      const index = (probeId - 1) % PER_PAGE;
 
-    const found = items.find(it => it.id === probeId);
-    if (found) {
-      return { ...found, id: requestedId }; // id tetap requested
+      const items = await fetchPage(page);
+      if (index >= 0 && index < items.length) {
+        return { id: globalId, ...items[index] };
+      }
     }
-
-    probeId++;
-    attempts++;
   }
 
-  return "not found";
+  return null;
 }
