@@ -21,11 +21,13 @@ const APP_TYPES = {
 
 const PER_PAGE = 20;
 
+/** Ambil satu halaman */
 async function fetchPage(type, page) {
   const url = `${BASE_URL}/app_showcase.php?&show=${PER_PAGE}&type=${type}&p=${page}`;
   try {
     const { data } = await axios.get(url, {
-      headers: { "User-Agent": "Mozilla/5.0" }
+      headers: { "User-Agent": "Mozilla/5.0" },
+      timeout: 8000
     });
     const $ = cheerio.load(data);
 
@@ -43,10 +45,7 @@ async function fetchPage(type, page) {
         fixedLink = BASE_URL + "/" + encodeURIComponent(rawPath.replace(/^\//, ""));
       }
 
-      apps.push({
-        nama: name,
-        link: fixedLink
-      });
+      apps.push({ nama: name, link: fixedLink });
     });
 
     return apps;
@@ -56,43 +55,46 @@ async function fetchPage(type, page) {
 }
 
 /**
- * Cari app berdasarkan ID global dengan fallback.
+ * Cari app berdasarkan ID global (hybrid batch).
  */
-export async function getAppByGlobalId(requestedId, maxAttempts = 5) {
+export async function getAppByGlobalId(requestedId, maxPagesPerCategory = 200, batchSize = 5) {
   if (!requestedId || requestedId < 1) return "not found";
 
   const categories = Object.entries(APP_TYPES);
   let globalCounter = 1;
 
-  // loop kategori
   for (const [category, type] of categories) {
-    let localId = 1;
+    let page = 0;
     let emptyCount = 0;
 
-    while (emptyCount < maxAttempts) {
-      const page = Math.ceil(localId / PER_PAGE);
-      const index = (localId - 1) % PER_PAGE;
+    while (page < maxPagesPerCategory && emptyCount < 5) {
+      // ambil batch paralel (misalnya 5 halaman sekaligus)
+      const batch = Array.from({ length: batchSize }, (_, i) => page + i);
+      const batchResults = await Promise.all(batch.map(p => fetchPage(type, p)));
 
-      const apps = await fetchPage(type, page);
-
-      if (index < apps.length) {
-        if (globalCounter === requestedId) {
-          return { id: requestedId, category, ...apps[index] };
+      let batchHasData = false;
+      for (let b = 0; b < batchResults.length; b++) {
+        const apps = batchResults[b];
+        if (apps.length > 0) {
+          batchHasData = true;
+          for (let index = 0; index < apps.length; index++) {
+            if (globalCounter === requestedId) {
+              return { id: requestedId, category, ...apps[index] };
+            }
+            globalCounter++;
+          }
         }
-        globalCounter++;
-        localId++;
-        emptyCount = 0;
-      } else {
-        // halaman kosong
-        emptyCount++;
-        localId++;
       }
-    }
 
-    // kalau sudah 30 halaman kosong → pindah kategori
+      if (!batchHasData) {
+        emptyCount++;
+      } else {
+        emptyCount = 0; // reset kalau ada data
+      }
+
+      page += batchSize; // lanjut ke batch berikutnya
+    }
   }
 
   return "not found";
-                                                }
-                                       
-
+}
