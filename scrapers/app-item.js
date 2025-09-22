@@ -57,15 +57,16 @@ async function fetchPage(type, page) {
 
 export async function getAppByGlobalId(requestedId, maxAttempts = 30) {
   const categories = Object.entries(APP_TYPES);
+
   let categoryIndex = 0;
-  let probeId = Number(requestedId);
+  let localId = 1; // mulai dari 1 per kategori
   let attempts = 0;
 
   while (categoryIndex < categories.length) {
     const [category, type] = categories[categoryIndex];
 
-    const page = Math.ceil(probeId / PER_PAGE);
-    const index = (probeId - 1) % PER_PAGE;
+    const page = Math.ceil(localId / PER_PAGE);
+    const index = (localId - 1) % PER_PAGE;
 
     const apps = await fetchPage(type, page);
 
@@ -73,13 +74,13 @@ export async function getAppByGlobalId(requestedId, maxAttempts = 30) {
       return { id: requestedId, category, ...apps[index] };
     }
 
-    probeId++;
+    localId++;
     attempts++;
 
     if (attempts >= maxAttempts) {
       // pindah kategori
       categoryIndex++;
-      probeId = 1; // reset id untuk kategori baru
+      localId = 1; // reset ke awal kategori baru
       attempts = 0;
     }
   }
