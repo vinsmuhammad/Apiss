@@ -88,8 +88,10 @@ export async function getAppByGlobalId(requestedId, maxAttempts = 30) {
         localId++;
       }
     }
-    // pindah kategori setelah maxAttempts kosong
+
+    // kalau sudah 30 halaman kosong → pindah kategori
   }
 
   return "not found";
-}
+                                                }
+                                       
