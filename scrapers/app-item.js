@@ -79,7 +79,7 @@ export async function getAppByGlobalId(requestedId, maxPagesPerCategory = 200, b
           batchHasData = true;
           for (let index = 0; index < apps.length; index++) {
             if (globalCounter === requestedId) {
-              return { id: requestedId, category, ...apps[index] };
+              return { id: requestedId, ...apps[index] };
             }
             globalCounter++;
           }
@@ -98,5 +98,6 @@ export async function getAppByGlobalId(requestedId, maxPagesPerCategory = 200, b
 
   return "not found";
 }
+
 
 
