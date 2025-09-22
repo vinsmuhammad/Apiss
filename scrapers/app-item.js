@@ -57,7 +57,7 @@ async function fetchPage(type, page) {
 /**
  * Cari app berdasarkan ID global (hybrid batch).
  */
-export async function getAppByGlobalId(requestedId, maxPagesPerCategory = 200, batchSize = 5) {
+export async function getAppByGlobalId(requestedId, maxPagesPerCategory = 200, batchSize = 10) {
   if (!requestedId || requestedId < 1) return "not found";
 
   const categories = Object.entries(APP_TYPES);
@@ -98,3 +98,4 @@ export async function getAppByGlobalId(requestedId, maxPagesPerCategory = 200, b
 
   return "not found";
 }
+
