@@ -31,10 +31,10 @@ async function scrapePage(page = 1) {
   return apps;
 }
 
-export async function getAppByGlobalId(globalId, maxAttempts = 30) {
-  if (!globalId || globalId < 1) return null;
+export async function getAppByGlobalId(requestedId, maxAttempts = 30) {
+  if (!requestedId || requestedId < 1) return "not found";
 
-  let probeId = Number(globalId);
+  let probeId = Number(requestedId);
   let attempts = 0;
 
   while (attempts < maxAttempts) {
@@ -43,12 +43,16 @@ export async function getAppByGlobalId(globalId, maxAttempts = 30) {
 
     const apps = await scrapePage(page);
     if (index >= 0 && index < apps.length) {
-      return { id: globalId, ...apps[index] };
+      const app = apps[index];
+
+      if (app && app.nama && app.nama !== "-") {
+        return { id: requestedId, ...app };
+      }
     }
 
     probeId++;
     attempts++;
   }
 
-  return null;
-}
+  return "not found";
+        }
