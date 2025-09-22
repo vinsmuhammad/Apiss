@@ -55,34 +55,40 @@ async function fetchPage(type, page) {
   }
 }
 
+/**
+ * Cari app berdasarkan ID global dengan fallback.
+ */
 export async function getAppByGlobalId(requestedId, maxAttempts = 30) {
+  if (!requestedId || requestedId < 1) return "not found";
+
   const categories = Object.entries(APP_TYPES);
+  let globalCounter = 1;
 
-  let categoryIndex = 0;
-  let localId = 1; // mulai dari 1 per kategori
-  let attempts = 0;
+  // loop kategori
+  for (const [category, type] of categories) {
+    let localId = 1;
+    let emptyCount = 0;
 
-  while (categoryIndex < categories.length) {
-    const [category, type] = categories[categoryIndex];
+    while (emptyCount < maxAttempts) {
+      const page = Math.ceil(localId / PER_PAGE);
+      const index = (localId - 1) % PER_PAGE;
 
-    const page = Math.ceil(localId / PER_PAGE);
-    const index = (localId - 1) % PER_PAGE;
+      const apps = await fetchPage(type, page);
 
-    const apps = await fetchPage(type, page);
-
-    if (index >= 0 && index < apps.length) {
-      return { id: requestedId, category, ...apps[index] };
+      if (index < apps.length) {
+        if (globalCounter === requestedId) {
+          return { id: requestedId, category, ...apps[index] };
+        }
+        globalCounter++;
+        localId++;
+        emptyCount = 0;
+      } else {
+        // halaman kosong
+        emptyCount++;
+        localId++;
+      }
     }
-
-    localId++;
-    attempts++;
-
-    if (attempts >= maxAttempts) {
-      // pindah kategori
-      categoryIndex++;
-      localId = 1; // reset ke awal kategori baru
-      attempts = 0;
-    }
+    // pindah kategori setelah maxAttempts kosong
   }
 
   return "not found";
