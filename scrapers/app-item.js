@@ -58,7 +58,7 @@ async function fetchPage(type, page) {
 /**
  * Cari app berdasarkan ID global dengan fallback.
  */
-export async function getAppByGlobalId(requestedId, maxAttempts = 30) {
+export async function getAppByGlobalId(requestedId, maxAttempts = 5) {
   if (!requestedId || requestedId < 1) return "not found";
 
   const categories = Object.entries(APP_TYPES);
@@ -95,3 +95,4 @@ export async function getAppByGlobalId(requestedId, maxAttempts = 30) {
   return "not found";
                                                 }
                                        
+
