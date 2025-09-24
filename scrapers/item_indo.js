@@ -4,6 +4,37 @@ import * as cheerio from "cheerio";
 const BASE_URL = "https://toram-id.com";
 const PER_PAGE = 20;
 
+// Mapping kategori
+const CATEGORY_MAP = {
+  "tongkat": "Staff",
+  "kayu": "Material",
+  "Crysta Penguat": "Enhancer Crysta",
+  "Crysta Perkakas Tambahan": "Additional Crysta",
+  "Pedang 2 Tangan": "2 Handed Sword",
+  "tameng": "Shield",
+  "kain": "Material",
+  "mana": "Mana",
+  "katana": "Katana",
+  "Crysta Perkakas Spesial": "Special Crysta",
+  "Perkakas Special": "Special",
+  "obat": "Material",
+  "panah": "Arrow",
+  "Pedang 1 Tangan": "1 Handed Sword",
+  "tinju": "Knuckles",
+  "tombak": "Halberd",
+  "Pesawat Sihir": "Magic Device",
+  "busur": "Bow",
+  "bowgun": "Bowgun",
+  "Perkakas Tambahan": "Additional",
+  "Belati": "Dagger",
+  "Crysta Normal": "Normal Crysta",
+  "Crysta Senjata": "Weapon Crysta",
+  "Crysta Zirah": "Armor Crysta",
+  "fauna": "Material",
+  "logam": "Material",
+  "permata": "Gem"
+}
+
 async function fetchObtainedFromDetail(relativeUrl) {
   try {
     const { data } = await axios.get(BASE_URL + relativeUrl, {
@@ -39,7 +70,18 @@ async function fetchPage(page = 1) {
     const items = [];
     $(".card").each((_, el) => {
       // Nama
-      const name = $(el).find("b.h6 a.text-primary").text().trim() || "-";
+      let name = $(el).find("b.h6 a.text-primary").text().trim() || "-";
+
+      // Cari kategori dari alt img → tempel ke name
+      const alt = $(el).find("img").first().attr("alt")?.trim() || "";
+      if (alt) {
+        for (const [key, alias] of Object.entries(CATEGORY_MAP)) {
+          if (alt.toLowerCase().includes(key.toLowerCase())) {
+            name = `${name} [${alias}]`;
+            break;
+          }
+        }
+      }
 
       // Status Monster
       const stats = [];
@@ -63,7 +105,6 @@ async function fetchPage(page = 1) {
           const map = $(a).parent().find("small").text().trim();
 
           if (txt && txt.toLowerCase().includes("lihat") && href) {
-            // placeholder: nanti akan diisi setelah fetch detail
             obtainedFrom.push({ type: "lihat", href });
           } else if (txt && !txt.includes("Lihat")) {
             obtainedFrom.push(map ? `${txt} ${map}` : txt);
@@ -113,7 +154,6 @@ export async function getItemIndoById(requestedId, maxAttempts = 30) {
     if (index >= 0 && index < items.length) {
       const item = items[index];
 
-      // kalau valid, return dengan id tetap = requestedId
       if (item && item.name && item.name !== "-") {
         return { id: requestedId, ...item };
       }
@@ -124,4 +164,4 @@ export async function getItemIndoById(requestedId, maxAttempts = 30) {
   }
 
   return "not found";
-}
+            }
