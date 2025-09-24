@@ -95,21 +95,26 @@ async function fetchPage(page = 1) {
 
       // Drop / diperoleh dari
       const obtainedFrom = [];
-      $(el)
-        .find("details summary:contains('Bisa di peroleh')")
-        .parent()
-        .find("div.my-2 a")
-        .each((_, a) => {
-          const txt = $(a).text().trim();
-          const href = $(a).attr("href");
-          const map = $(a).parent().find("small").text().trim();
+$(el)
+  .find("details summary:contains('Bisa di peroleh')")
+  .parent()
+  .find("div.my-2 a")
+  .each((_, a) => {
+    const txt = $(a).text().trim();
+    const href = $(a).attr("href");
+    const map = $(a).parent().find("small").text().trim();
 
-          if (txt && txt.toLowerCase().includes("lihat") && href) {
-            obtainedFrom.push({ type: "lihat", href });
-          } else if (txt && !txt.includes("Lihat")) {
-            obtainedFrom.push(map ? `${txt} ${map}` : txt);
-          }
-        });
+    if (txt && txt.toLowerCase().includes("lihat") && href) {
+      // masih simpan sebagai type: lihat (akan diproses lanjut)
+      obtainedFrom.push({ type: "lihat", href });
+    } else if (txt && !txt.toLowerCase().includes("lihat")) {
+      // langsung bentuk objek { monster, map }
+      obtainedFrom.push({
+        monster: txt,
+        map: map || ""
+      });
+    }
+  });
 
       items.push({
         name,
@@ -118,20 +123,42 @@ async function fetchPage(page = 1) {
       });
     });
 
-    // resolve semua "Lihat..."
-    for (const item of items) {
-      const newList = [];
-      for (const entry of item.obtainedFrom) {
-        if (typeof entry === "object" && entry.type === "lihat") {
-          const drops = await fetchObtainedFromDetail(entry.href);
-          newList.push(...drops);
-        } else {
-          newList.push(entry);
-        }
-      }
-      if (!newList.length) newList.push("-");
-      item.obtainedFrom = newList;
+    // resolve semua "Lihat..." dan rapikan format obtainedFrom
+for (const item of items) {
+  const rawList = [];
+
+  for (const entry of item.obtainedFrom) {
+    if (typeof entry === "object" && entry.type === "lihat") {
+      const drops = await fetchObtainedFromDetail(entry.href);
+      rawList.push(...drops);
+    } else if (typeof entry === "string") {
+      rawList.push(entry);
     }
+  }
+
+  // konversi ke array objek { monster, map }
+  const parsedList = [];
+  const seen = new Set();
+
+  for (const line of rawList) {
+    if (!line || line === "-") continue;
+
+    // Format umum: "Monster (Lv xxx) [Map]"
+    const monsterMatch = line.match(/^([^\[]+?)(?=\s*\[|$)/);
+    const mapMatch = line.match(/\[(.+?)\]/);
+
+    const monster = monsterMatch ? monsterMatch[1].trim() : "";
+    const map = mapMatch ? mapMatch[1].trim() : "";
+
+    const key = `${monster.toLowerCase()}|${map.toLowerCase()}`;
+    if (seen.has(key)) continue;
+
+    parsedList.push({ monster, map });
+    seen.add(key);
+  }
+
+  item.obtainedFrom = parsedList.length ? parsedList : [];
+}
 
     return items;
   } catch (e) {
@@ -165,3 +192,4 @@ export async function getItemIndoById(requestedId, maxAttempts = 30) {
 
   return "not found";
             }
+
