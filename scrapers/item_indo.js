@@ -107,7 +107,7 @@ async function fetchPage(page = 1) {
           if (txt && txt.toLowerCase().includes("lihat") && href) {
             obtainedFrom.push({ type: "lihat", href });
           } else if (txt && !txt.includes("Lihat")) {
-            obtainedFrom.push(map ? `${txt} [${map}]` : txt);
+            obtainedFrom.push(map ? `${txt} ${map}` : txt);
           }
         });
 
@@ -118,37 +118,36 @@ async function fetchPage(page = 1) {
       });
     });
 
-    // resolve semua "Lihat..." dan format monster/map
+    // resolve semua "Lihat..."
     for (const item of items) {
-      const obtainedList = [];
-
+      const newList = [];
       for (const entry of item.obtainedFrom) {
-        let dropEntries = [];
-
         if (typeof entry === "object" && entry.type === "lihat") {
-          dropEntries = await fetchObtainedFromDetail(entry.href);
-        } else if (typeof entry === "string") {
-          dropEntries = [entry];
+          const drops = await fetchObtainedFromDetail(entry.href);
+          newList.push(...drops);
+        } else {
+          newList.push(entry);
         }
+      }
 
-        for (const drop of dropEntries) {
-          // pisahkan monster dan map, buang (Lv xxx) dari monster
+      // parse jadi object { monster, map }
+      const obtainedList = [];
+      for (const drop of newList) {
+        if (typeof drop === "string") {
           const matches = drop.match(/^(.+?)\s*\[(.+?)\]$/);
           if (matches) {
             let monsterName = matches[1].trim();
             let mapName = matches[2].trim();
 
-            // hapus (Lv xxx) jika ada
+            // hapus level
             monsterName = monsterName.replace(/\s*\(Lv\s*\d+\)/i, "").trim();
+            // hapus bracket nyasar di monster
+            monsterName = monsterName.replace(/[\[\]]/g, "").trim();
+            // hapus bracket di map
+            const cleanMap = mapName.replace(/[\[\]]/g, "").trim();
 
-            // skip kalau monsterName kosong atau map mengandung event
-            if (monsterName && !mapName.toLowerCase().includes("event")) {
-              // bersihkan map dari tanda [ ]
-              const cleanMap = mapName.replace(/[\[\]]/g, "").trim();
-              obtainedList.push({ 
-                monster: monsterName, 
-                map: cleanMap
-              });
+            if (monsterName && !cleanMap.toLowerCase().includes("event")) {
+              obtainedList.push({ monster: monsterName, map: cleanMap });
             }
           }
         }
@@ -188,4 +187,4 @@ export async function getItemIndoById(requestedId, maxAttempts = 30) {
   }
 
   return "not found";
-      }
+              }
