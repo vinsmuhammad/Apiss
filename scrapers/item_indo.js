@@ -143,10 +143,13 @@ async function fetchPage(page = 1) {
 
             // skip kalau monsterName kosong atau map mengandung event
             if (monsterName && !mapName.toLowerCase().includes("event")) {
-              obtainedList.push({ 
-                monster: monsterName, 
-                map: mapName // sudah tanpa [ ]
-              });
+  // bersihkan map dari tanda [ ]
+  const cleanMap = mapName.replace(/[\[\]]/g, "").trim();
+  obtainedList.push({ 
+    monster: monsterName, 
+    map: cleanMap
+  });
+}
             }
           }
         }
@@ -188,3 +191,4 @@ export async function getItemIndoById(requestedId, maxAttempts = 30) {
   return "not found";
 }
   
+
