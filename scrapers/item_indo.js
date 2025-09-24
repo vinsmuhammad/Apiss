@@ -119,38 +119,42 @@ async function fetchPage(page = 1) {
     });
 
     // resolve semua "Lihat..." dan format monster/map
-    for (const item of items) {
-      const obtainedList = [];
+    // resolve semua "Lihat..." dan format monster/map
+for (const item of items) {
+  const obtainedList = [];
 
-      for (const entry of item.obtainedFrom) {
-        let dropEntries = [];
+  for (const entry of item.obtainedFrom) {
+    let dropEntries = [];
 
-        if (typeof entry === "object" && entry.type === "lihat") {
-          dropEntries = await fetchObtainedFromDetail(entry.href);
-        } else if (typeof entry === "string") {
-          dropEntries = [entry];
-        }
+    if (typeof entry === "object" && entry.type === "lihat") {
+      dropEntries = await fetchObtainedFromDetail(entry.href);
+    } else if (typeof entry === "string") {
+      dropEntries = [entry];
+    }
 
-        for (const drop of dropEntries) {
-          // pisahkan monster dan map, buang (Lv xxx) dari monster
-          const matches = drop.match(/^(.+?)\s*\[(.+?)\]$/);
-          if (matches) {
-            let monsterName = matches[1].trim();
-            const mapName = matches[2].trim();
+    for (const drop of dropEntries) {
+      // pisahkan monster dan map, buang (Lv xxx) dari monster
+      const matches = drop.match(/^(.+?)\s*\[(.+?)\]$/);
+      if (matches) {
+        let monsterName = matches[1].trim();
+        let mapName = matches[2].trim();
 
-            // hapus (Lv xxx) jika ada
-            monsterName = monsterName.replace(/\s*\(Lv\s*\d+\)/i, "").trim();
+        // hapus (Lv xxx) jika ada
+        monsterName = monsterName.replace(/\s*\(Lv\s*\d+\)/i, "").trim();
 
-            // skip kalau monsterName kosong atau map mengandung event
-            if (monsterName && !mapName.toLowerCase().includes("event")) {
-              obtainedList.push({ monster: monsterName, map: mapName });
-            }
-          }
+        // skip kalau monsterName kosong atau map mengandung event
+        if (monsterName && !mapName.toLowerCase().includes("event")) {
+          obtainedList.push({ 
+            monster: monsterName, 
+            map: mapName // sudah tanpa [ ]
+          });
         }
       }
-
-      item.obtainedFrom = obtainedList;
     }
+  }
+
+  item.obtainedFrom = obtainedList;
+}
 
     return items;
   } catch (e) {
@@ -185,3 +189,4 @@ export async function getItemIndoById(requestedId, maxAttempts = 30) {
   return "not found";
 }
   
+
