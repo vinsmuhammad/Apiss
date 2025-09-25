@@ -3,7 +3,6 @@ import * as cheerio from "cheerio";
 
 const BASE_URL = "https://toram-id.com";
 
-// Mapping kategori
 const CATEGORY_MAP = {
   "tongkat": "Staff",
   "kayu": "Material",
@@ -34,36 +33,48 @@ const CATEGORY_MAP = {
   "permata": "Gem"
 };
 
-// Ambil stats
+function mapCategoryFromImg($, el) {
+  const alt = $(el).find("img").first().attr("alt")?.trim() || "";
+  if (alt) {
+    for (const [key, alias] of Object.entries(CATEGORY_MAP)) {
+      if (alt.toLowerCase().includes(key.toLowerCase())) {
+        return alias;
+      }
+    }
+  }
+  return null;
+}
+
 function parseStats($) {
   const stats = [];
-  $(".card-body .row").each((_, el) => {
-    const key = $(el).find(".col-4").text().trim();
-    const val = $(el).find(".col-8").text().trim();
-    if (key && val) {
-      stats.push(`${key}: ${val}`);
-    }
+  $("#status-monster p").each((_, p) => {
+    const txt = $(p).text().trim();
+    if (txt) stats.push(txt);
   });
   return stats.length > 0 ? stats : ["-"];
 }
 
-// Ambil obtainedFrom
 function parseObtainedFrom($) {
   const obtainedFrom = [];
-  $("#drop-list .row").each((_, el) => {
-    const monster = $(el).find('a[href*="/monster/"]').text().trim();
-    const map = $(el).find('a[href*="/map/"]').text().trim();
 
-    if (monster || map) {
-      let cleanMonster = monster.replace(/\(Lv\s*\d+\)/i, "").trim();
-      cleanMonster = cleanMonster.replace(/[\[\]]/g, "").trim();
-      const cleanMap = map.replace(/[\[\]]/g, "").trim();
-
-      if (cleanMonster && !cleanMap.toLowerCase().includes("event")) {
-        obtainedFrom.push({ monster: cleanMonster, map: cleanMap });
-      }
+  const dropCard = $('.card:has(h2.card-title:contains("Drop Dari"))');
+  if (dropCard.length) {
+    const noDrop = dropCard.find("small.text-muted").text().trim();
+    if (noDrop && noDrop.includes("tidak ada")) {
+      return [];
     }
-  });
+
+    dropCard.find("ul.list-group li").each((_, li) => {
+      const monster = $(li).find("a.text-primary").text().trim();
+      if (monster) {
+        let cleanMonster = monster.replace(/\(Lv\s*\d+\)/i, "").trim();
+        cleanMonster = cleanMonster.replace(/[\[\]]/g, "").trim();
+
+        obtainedFrom.push({ monster: cleanMonster, map: "-" });
+      }
+    });
+  }
+
   return obtainedFrom;
 }
 
@@ -73,37 +84,26 @@ export async function getItemIndoById(id) {
   try {
     const { data } = await axios.get(`${BASE_URL}/item/${id}`, {
       headers: { "User-Agent": "Mozilla/5.0" },
-      timeout: 15000
+      timeout: 15000,
     });
 
     const $ = cheerio.load(data);
 
-    // Ambil nama item yang paling atas
-    let itemName = $("h5.card-title").first().text().trim();
-    if (!itemName) {
-      itemName = $(".card-header .card-title").first().text().trim();
-    }
-    if (!itemName) return "not found";
+    const rawName = $(".page-title").first().text().trim();
+    if (!rawName) return "not found";
 
-    // Tambah kategori dari alt img
-    const alt = $(".card img").first().attr("alt")?.trim() || "";
-    if (alt) {
-      for (const [key, alias] of Object.entries(CATEGORY_MAP)) {
-        if (alt.toLowerCase().includes(key.toLowerCase())) {
-          itemName = `${itemName} [${alias}]`;
-          break;
-        }
-      }
-    }
+    let name = rawName;
+    const cat = mapCategoryFromImg($, $(".card-body dl dt"));
+    if (cat) name = `${name} [${cat}]`;
 
     const stats = parseStats($);
     const obtainedFrom = parseObtainedFrom($);
 
     return {
       id,
-      name: itemName,
+      name,
       stats,
-      obtainedFrom
+      obtainedFrom,
     };
   } catch (e) {
     console.error(`getItemIndoById error (id=${id}):`, e.message);
