@@ -2,7 +2,6 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 
 const BASE_URL = "https://toram-id.com";
-const PER_PAGE = 20;
 
 // Mapping kategori
 const CATEGORY_MAP = {
@@ -35,156 +34,76 @@ const CATEGORY_MAP = {
   "permata": "Gem"
 };
 
-async function fetchObtainedFromDetail(relativeUrl) {
+// Ambil stats item
+function parseStats($) {
+  const stats = [];
+  $(".card-body .row").each((_, el) => {
+    const key = $(el).find(".col-4").text().trim();
+    const val = $(el).find(".col-8").text().trim();
+    if (key && val) {
+      stats.push(`${key}: ${val}`);
+    }
+  });
+  return stats.length > 0 ? stats : ["-"];
+}
+
+// Ambil obtainedFrom
+function parseObtainedFrom($) {
+  const obtainedFrom = [];
+  $("#drop-list .row").each((_, el) => {
+    const monster = $(el).find('a[href*="/monster/"]').text().trim();
+    const map = $(el).find('a[href*="/map/"]').text().trim();
+
+    if (monster || map) {
+      let cleanMonster = monster.replace(/\(Lv\s*\d+\)/i, "").trim();
+      cleanMonster = cleanMonster.replace(/[\[\]]/g, "").trim();
+      const cleanMap = map.replace(/[\[\]]/g, "").trim();
+
+      if (cleanMonster && !cleanMap.toLowerCase().includes("event")) {
+        obtainedFrom.push({ monster: cleanMonster, map: cleanMap });
+      }
+    }
+  });
+  return obtainedFrom;
+}
+
+// Fungsi utama
+export async function getItemIndoById(id) {
+  if (!id || id < 1) return "not found";
+
   try {
-    const { data } = await axios.get(BASE_URL + relativeUrl, {
+    const { data } = await axios.get(`${BASE_URL}/item/${id}`, {
       headers: { "User-Agent": "Mozilla/5.0" },
       timeout: 15000
     });
+
     const $ = cheerio.load(data);
 
-    const results = [];
-    $(".card:contains('Drop Dari') .card-body .mb-5").each((_, el) => {
-      const monster = $(el).find("dt a.text-primary").text().trim();
-      const map = $(el).find("dd b:contains('Peta:')").parent().find("a").text().trim();
-      if (monster) {
-        results.push(map ? `${monster} [${map}]` : monster);
-      }
-    });
-    return results.length ? results : ["-"];
-  } catch (e) {
-    console.error("fetchObtainedFromDetail error:", e.message);
-    return ["-"];
-  }
-}
+    let itemName = $(".card-title").first().text().trim();
+    if (!itemName) return "not found";
 
-async function fetchPage(page = 1) {
-  const url = `${BASE_URL}/items?page=${page}`;
-  try {
-    const { data } = await axios.get(url, {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      timeout: 15000
-    });
-    const $ = cheerio.load(data);
-
-    const items = [];
-    $(".card").each((_, el) => {
-      // Nama
-      let name = $(el).find("b.h6 a.text-primary").text().trim() || "-";
-
-      // Cari kategori dari alt img → tempel ke name
-      const alt = $(el).find("img").first().attr("alt")?.trim() || "";
-      if (alt) {
-        for (const [key, alias] of Object.entries(CATEGORY_MAP)) {
-          if (alt.toLowerCase().includes(key.toLowerCase())) {
-            name = `${name} [${alias}]`;
-            break;
-          }
+    // Ambil kategori dari <img alt="">
+    const alt = $(".card img").first().attr("alt")?.trim() || "";
+    if (alt) {
+      for (const [key, alias] of Object.entries(CATEGORY_MAP)) {
+        if (alt.toLowerCase().includes(key.toLowerCase())) {
+          itemName = `${itemName} [${alias}]`;
+          break;
         }
-      }
-
-      // Status Monster
-      const stats = [];
-      $(el)
-        .find(".tab-pane[id^='status-monster'] dl p")
-        .each((_, p) => {
-          const txt = $(p).text().trim();
-          if (txt) stats.push(txt);
-        });
-      if (stats.length === 0) stats.push("-");
-
-      // Drop / diperoleh dari
-      const obtainedFrom = [];
-      $(el)
-        .find("details summary:contains('Bisa di peroleh')")
-        .parent()
-        .find("div.my-2 a")
-        .each((_, a) => {
-          const txt = $(a).text().trim();
-          const href = $(a).attr("href");
-          const map = $(a).parent().find("small").text().trim();
-
-          if (txt && txt.toLowerCase().includes("lihat") && href) {
-            obtainedFrom.push({ type: "lihat", href });
-          } else if (txt && !txt.includes("Lihat")) {
-            obtainedFrom.push(map ? `${txt} ${map}` : txt);
-          }
-        });
-
-      items.push({
-        name,
-        stats,
-        obtainedFrom
-      });
-    });
-
-    // resolve semua "Lihat..."
-    for (const item of items) {
-      const newList = [];
-      for (const entry of item.obtainedFrom) {
-        if (typeof entry === "object" && entry.type === "lihat") {
-          const drops = await fetchObtainedFromDetail(entry.href);
-          newList.push(...drops);
-        } else {
-          newList.push(entry);
-        }
-      }
-
-      // parse jadi object { monster, map }
-      const obtainedList = [];
-      for (const drop of newList) {
-        if (typeof drop === "string") {
-          const matches = drop.match(/^(.+?)\s*\[(.+?)\]$/);
-          if (matches) {
-            let monsterName = matches[1].trim();
-            let mapName = matches[2].trim();
-
-            // hapus level
-            monsterName = monsterName.replace(/\s*\(Lv\s*\d+\)/i, "").trim();
-            // hapus bracket nyasar di monster
-            monsterName = monsterName.replace(/[\[\]]/g, "").trim();
-            // hapus bracket di map
-            const cleanMap = mapName.replace(/[\[\]]/g, "").trim();
-
-            if (monsterName && !cleanMap.toLowerCase().includes("event")) {
-              obtainedList.push({ monster: monsterName, map: cleanMap });
-            }
-          }
-        }
-      }
-
-      item.obtainedFrom = obtainedList;
-    }
-
-    return items;
-  } catch (e) {
-    console.error("fetchPage error:", e.message);
-    return [];
-  }
-}
-
-export async function getItemIndoById(requestedId, maxAttempts = 30) {
-  if (!requestedId || requestedId < 1) return "not found";
-
-  let probeId = Number(requestedId);
-  let attempts = 0;
-
-  while (attempts < maxAttempts) {
-    const page = Math.ceil(probeId / PER_PAGE);
-    const index = (probeId - 1) % PER_PAGE;
-
-    const items = await fetchPage(page);
-    if (index >= 0 && index < items.length) {
-      const item = items[index];
-
-      if (item && item.name && item.name !== "-") {
-        return { id: requestedId, ...item };
       }
     }
 
-    probeId++;
-    attempts++;
-  }
+    const stats = parseStats($);
+    const obtainedFrom = parseObtainedFrom($);
 
-  return "not found";
-              }
+    return {
+      id,
+      name: itemName,
+      stats,
+      obtainedFrom
+    };
+  } catch (e) {
+    console.error(`getItemIndoById error (id=${id}):`, e.message);
+    return "not found";
+  }
+      }
