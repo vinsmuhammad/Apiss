@@ -15,6 +15,7 @@ const CATEGORY_MAP = {
   "katana": "Katana",
   "Crysta Perkakas Spesial": "Special Crysta",
   "Perkakas Spesial": "Special",
+  "Perkakas Special": "Special",
   "obat": "Material",
   "panah": "Arrow",
   "Pedang 1 Tangan": "1 Handed Sword",
@@ -135,5 +136,6 @@ if (cat) {
     return "not found";
   }
 }
+
 
 
