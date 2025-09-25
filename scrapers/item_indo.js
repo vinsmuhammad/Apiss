@@ -55,29 +55,30 @@ function parseStats($) {
 }
 
 function parseObtainedFrom($) {
+function parseObtainedFrom($) {
   const obtainedFrom = [];
-
   const dropCard = $('.card:has(h2.card-title:contains("Drop Dari"))');
-  if (dropCard.length) {
-    const noDrop = dropCard.find("small.text-muted").text().trim();
-    if (noDrop && noDrop.includes("tidak ada")) {
-      return [];
-    }
 
-    dropCard.find("ul.list-group li").each((_, li) => {
-      const monster = $(li).find("a.text-primary").text().trim();
+  if (dropCard.length) {
+    // cari setiap blok monster
+    dropCard.find("dl > div.mb-5").each((_, div) => {
+      const monster = $(div).find("dt a.text-primary").text().trim();
+      const map = $(div).find("dd b:contains('Peta:')").next("a").text().trim();
+
       if (monster) {
         let cleanMonster = monster.replace(/\(Lv\s*\d+\)/i, "").trim();
         cleanMonster = cleanMonster.replace(/[\[\]]/g, "").trim();
 
-        obtainedFrom.push({ monster: cleanMonster, map: "-" });
+        obtainedFrom.push({
+          monster: cleanMonster,
+          map: map || "-"
+        });
       }
     });
   }
 
   return obtainedFrom;
 }
-
 export async function getItemIndoById(id) {
   if (!id || id < 1) return "not found";
 
@@ -110,3 +111,4 @@ export async function getItemIndoById(id) {
     return "not found";
   }
 }
+
