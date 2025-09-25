@@ -34,7 +34,7 @@ const CATEGORY_MAP = {
   "permata": "Gem"
 };
 
-// Ambil stats item
+// Ambil stats
 function parseStats($) {
   const stats = [];
   $(".card-body .row").each((_, el) => {
@@ -67,7 +67,6 @@ function parseObtainedFrom($) {
   return obtainedFrom;
 }
 
-// Fungsi utama
 export async function getItemIndoById(id) {
   if (!id || id < 1) return "not found";
 
@@ -79,10 +78,14 @@ export async function getItemIndoById(id) {
 
     const $ = cheerio.load(data);
 
-    let itemName = $(".card-title").first().text().trim();
+    // Ambil nama item yang paling atas
+    let itemName = $("h5.card-title").first().text().trim();
+    if (!itemName) {
+      itemName = $(".card-header .card-title").first().text().trim();
+    }
     if (!itemName) return "not found";
 
-    // Ambil kategori dari <img alt="">
+    // Tambah kategori dari alt img
     const alt = $(".card img").first().attr("alt")?.trim() || "";
     if (alt) {
       for (const [key, alias] of Object.entries(CATEGORY_MAP)) {
@@ -106,4 +109,4 @@ export async function getItemIndoById(id) {
     console.error(`getItemIndoById error (id=${id}):`, e.message);
     return "not found";
   }
-      }
+}
