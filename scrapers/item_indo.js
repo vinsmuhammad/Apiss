@@ -112,15 +112,26 @@ export async function getItemIndoById(id) {
     const rawName = $(".page-title").first().text().trim();
     if (!rawName) return "not found";
 
-    let name = rawName;
-const cat = mapCategoryFromImg($, $(".card-body dl dt"));
-if (cat) {
-  // hapus suffix lama yang dalam kurung siku, contoh: [panah]
-  name = name.replace(/\s*\[.*?\]\s*$/, "").trim();
-  // tambahkan kategori hasil mapping
-  name = `${name} [${cat}]`;
-}
-    
+    // --- ambil nama & kategori langsung dari judul ---
+    let baseName = rawName;
+    let cat = null;
+
+    const match = rawName.match(/\[(.*?)\]$/); // cari [ ... ] di ujung
+    if (match) {
+      const rawCat = match[1].trim();
+      baseName = rawName.replace(match[0], "").trim();
+
+      // mapping kategori pakai CATEGORY_MAP
+      for (const [key, alias] of Object.entries(CATEGORY_MAP)) {
+        if (rawCat.toLowerCase().includes(key.toLowerCase())) {
+          cat = alias;
+          break;
+        }
+      }
+    }
+
+    let name = baseName;
+    if (cat) name = `${baseName} [${cat}]`;
 
     const stats = parseStats($);
     const obtainedFrom = parseObtainedFrom($);
@@ -136,6 +147,3 @@ if (cat) {
     return "not found";
   }
 }
-
-
-
