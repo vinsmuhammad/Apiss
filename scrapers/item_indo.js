@@ -112,8 +112,14 @@ export async function getItemIndoById(id) {
     if (!rawName) return "not found";
 
     let name = rawName;
-    const cat = mapCategoryFromImg($, $(".card-body dl dt"));
-    if (cat) name = `${name} [${cat}]`;
+const cat = mapCategoryFromImg($, $(".card-body dl dt"));
+if (cat) {
+  // hapus suffix lama yang dalam kurung siku, contoh: [panah]
+  name = name.replace(/\s*\[.*?\]\s*$/, "").trim();
+  // tambahkan kategori hasil mapping
+  name = `${name} [${cat}]`;
+}
+    
 
     const stats = parseStats($);
     const obtainedFrom = parseObtainedFrom($);
@@ -129,3 +135,4 @@ export async function getItemIndoById(id) {
     return "not found";
   }
 }
+
