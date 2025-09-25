@@ -34,10 +34,15 @@ const CATEGORY_MAP = {
 };
 
 function mapCategoryFromImg($, el) {
-  const alt = $(el).find("img").first().attr("alt")?.trim() || "";
-  if (alt) {
+  const img = $(el).find("img").first();
+  const alt = img.attr("alt")?.trim() || "";
+  const src = img.attr("src")?.toLowerCase() || "";
+
+  const target = alt || src; // pakai alt, kalau kosong fallback ke src
+
+  if (target) {
     for (const [key, alias] of Object.entries(CATEGORY_MAP)) {
-      if (alt.toLowerCase().includes(key.toLowerCase())) {
+      if (target.toLowerCase().includes(key.toLowerCase())) {
         return alias;
       }
     }
@@ -59,7 +64,7 @@ function parseObtainedFrom($) {
   const dropCard = $('.card:has(h2.card-title:contains("Drop Dari"))');
 
   if (dropCard.length) {
-    // handle format baru (pakai dl + div.mb-5)
+    // format baru (dl + div.mb-5)
     dropCard.find("dl > div.mb-5").each((_, div) => {
       const monster = $(div).find("dt a.text-primary").text().trim();
       const map = $(div).find("dd b:contains('Peta:')").next("a").text().trim();
@@ -75,7 +80,7 @@ function parseObtainedFrom($) {
       }
     });
 
-    // fallback ke format lama (pakai ul.list-group)
+    // fallback ke format lama (ul.list-group)
     if (obtainedFrom.length === 0) {
       dropCard.find("ul.list-group li").each((_, li) => {
         const monster = $(li).find("a.text-primary").text().trim();
